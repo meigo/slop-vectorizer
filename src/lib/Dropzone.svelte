@@ -2,7 +2,16 @@
 <script lang="ts">
   let { onfile, error = null }: { onfile: (file: File) => void; error?: string | null } = $props()
   let dragging = $state(false)
+  let fileInput: HTMLInputElement
 
+  function browse() {
+    fileInput.click()
+  }
+  function picked() {
+    const f = fileInput.files?.[0]
+    if (f) onfile(f)
+    fileInput.value = ''
+  }
   function drop(e: DragEvent) {
     e.preventDefault()
     dragging = false
@@ -17,14 +26,17 @@
 </script>
 
 <svelte:window onpaste={paste} />
+<input type="file" accept="image/*" hidden bind:this={fileInput} onchange={picked} />
 <div
   class="dropzone" class:dragging
   ondragover={(e) => { e.preventDefault(); dragging = true }}
   ondragleave={() => (dragging = false)}
   ondrop={drop}
+  onclick={browse}
+  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); browse() } }}
   role="button" tabindex="0"
 >
-  <p>Drop an image here or paste from clipboard</p>
+  <p>Drop an image here, click to browse, or paste from clipboard</p>
   {#if error}<p class="error">{error}</p>{/if}
 </div>
 
