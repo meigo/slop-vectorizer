@@ -22,6 +22,17 @@
     ctx.putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
   })
 
+  // Fit and center whenever a new image arrives (same image + new options keeps the view).
+  $effect(() => {
+    const { width, height } = image
+    if (!container) return
+    const cw = container.clientWidth, ch = container.clientHeight
+    const z = Math.min(1, cw / width, ch / height)
+    zoom = z
+    panX = (cw - width * z) / 2
+    panY = (ch - height * z) / 2
+  })
+
   function wheel(e: WheelEvent) {
     e.preventDefault()
     const rect = container.getBoundingClientRect()
@@ -53,13 +64,17 @@
   onwheel={wheel} onpointerdown={down} onpointermove={move} onpointerup={up}
   role="img" aria-label="Compare original and vectorized"
 >
-  <div class="layer" style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}
-       style:clip-path={`inset(0 ${100 - divider}% 0 0)`}>
-    <canvas bind:this={canvas} style:image-rendering="pixelated"></canvas>
+  <!-- clip-path lives on an UNtransformed wrapper so it stays in screen space
+       (aligned with the divider line); the transform is on the inner layer. -->
+  <div class="clip" style:clip-path={`inset(0 ${100 - divider}% 0 0)`}>
+    <div class="layer" style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}>
+      <canvas bind:this={canvas} style:image-rendering="pixelated"></canvas>
+    </div>
   </div>
-  <div class="layer" style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}
-       style:clip-path={`inset(0 0 0 ${divider}%)`}>
-    {@html svg}
+  <div class="clip" style:clip-path={`inset(0 0 0 ${divider}%)`}>
+    <div class="layer" style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}>
+      {@html svg}
+    </div>
   </div>
   <div class="divider" style:left={`${divider}%`}
        onpointerdown={(e) => { e.stopPropagation(); draggingDivider = true; (e.target as Element).setPointerCapture(e.pointerId) }}
@@ -74,6 +89,7 @@
       repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;
     touch-action: none; cursor: grab;
   }
+  .clip { position: absolute; inset: 0; }
   .layer { position: absolute; inset: 0; transform-origin: 0 0; }
   .layer :global(svg), .layer canvas { display: block; width: auto; height: auto; }
   .divider {
