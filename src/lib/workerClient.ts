@@ -13,6 +13,7 @@ export class VectorizerClient {
 
   vectorize(image: RasterImage, options: PipelineOptions,
             onProgress?: (stage: StageName) => void): Promise<VectorResult> {
+    this.pending?.reject(new Error('cancelled')) // a new call supersedes any unsettled job
     const jobId = ++this.jobId
     return new Promise<VectorResult>((resolve, reject) => {
       this.pending = { reject }

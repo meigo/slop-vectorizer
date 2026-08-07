@@ -67,11 +67,11 @@ function run(image: RasterImage, options: PipelineOptions, post: (m: WorkerRespo
   post({ type: 'result', jobId, result: { svg, stats: { pathCount: paths.length, pointCount, timings } } })
 }
 
-function sameImageData(a: RasterImage | null, b: RasterImage): boolean {
+export function sameImageData(a: RasterImage | null, b: RasterImage): boolean {
   if (!a || a.width !== b.width || a.height !== b.height || a.data.length !== b.data.length) return false
-  // cheap probe: compare 256 spread samples, not every byte
-  const step = Math.max(1, Math.floor(a.data.length / 256))
-  for (let i = 0; i < a.data.length; i += step) if (a.data[i] !== b.data[i]) return false
+  // full compare with early exit — a sampled probe can miss a small localized edit
+  // between sample offsets; ~1ms for a 4MB buffer is negligible vs the pipeline
+  for (let i = 0; i < a.data.length; i++) if (a.data[i] !== b.data[i]) return false
   return true
 }
 
