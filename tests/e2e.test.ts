@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { vectorize } from '../src/worker/pipeline'
 import { DEFAULT_OPTIONS } from '../src/types'
-import { renderShape, insideCircle, insideRotSquare } from './helpers/render'
+import { renderShape, insideCircle, insideRing, insideRotSquare } from './helpers/render'
 
 describe('vectorize round-trip', () => {
   it('circle on background -> 2 paths, sane stats, progress in order', () => {
@@ -27,5 +27,14 @@ describe('vectorize round-trip', () => {
         }
     const { stats } = vectorize(img, DEFAULT_OPTIONS)
     expect(stats.pathCount).toBe(3)
+  })
+
+  it('thin stroke logo -> stroke survives instead of a blank rect', () => {
+    const img = renderShape(128, 128, insideRing(64, 64, 40, 0.75), [0, 0, 0], [255, 255, 255])
+    for (const colorCount of ['auto', 2] as const) {
+      const { svg, stats } = vectorize(img, { ...DEFAULT_OPTIONS, colorCount })
+      expect(stats.pathCount).toBeGreaterThanOrEqual(2) // background + ring (+ its hole)
+      expect(svg).toContain('<path')
+    }
   })
 })

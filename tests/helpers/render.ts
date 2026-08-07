@@ -28,6 +28,11 @@ export function insideCircle(cx: number, cy: number, r: number) {
   return (x: number, y: number) => (x - cx) ** 2 + (y - cy) ** 2 <= r * r
 }
 
+/** Thin annulus: stroke width is 2*halfWidth px. */
+export function insideRing(cx: number, cy: number, r: number, halfWidth: number) {
+  return (x: number, y: number) => Math.abs(Math.hypot(x - cx, y - cy) - r) <= halfWidth
+}
+
 export function insideRotSquare(cx: number, cy: number, half: number, angleRad: number) {
   const c = Math.cos(-angleRad), s = Math.sin(-angleRad)
   return (x: number, y: number) => {
