@@ -61,10 +61,15 @@ function run(image: RasterImage, options: PipelineOptions, post: (m: WorkerRespo
       const area = Math.max(...r.loops.map(l => Math.abs(polygonArea(l))))
       return { paletteIndex: cache.seg!.regionColor[r.region], area, loops }
     }))
-  const svg = stage('svg', () => assembleSvg(paths, cache.palette!, image.width, image.height))
+  const svg = stage('svg', () =>
+    assembleSvg(paths, cache.palette!, image.width, image.height, {
+      mergePaths: options.mergePaths,
+      transparentBg: options.transparentBg,
+    }))
+  const pathCount = (svg.match(/<path/g) ?? []).length
   cache.image = image
   cache.options = options
-  post({ type: 'result', jobId, result: { svg, stats: { pathCount: paths.length, pointCount, timings } } })
+  post({ type: 'result', jobId, result: { svg, stats: { pathCount, pointCount, timings } } })
 }
 
 export function sameImageData(a: RasterImage | null, b: RasterImage): boolean {

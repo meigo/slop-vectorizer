@@ -15,6 +15,10 @@ describe('firstDirtyStage', () => {
     expect(firstDirtyStage(base, { ...base, smoothness: 0.9 }, true)).toBe('fit'))
   it('no prev -> palette', () =>
     expect(firstDirtyStage(null, base, true)).toBe('palette'))
+  it('mergePaths change -> fit', () =>
+    expect(firstDirtyStage(base, { ...base, mergePaths: !base.mergePaths }, true)).toBe('fit'))
+  it('transparentBg change -> fit', () =>
+    expect(firstDirtyStage(base, { ...base, transparentBg: !base.transparentBg }, true)).toBe('fit'))
 })
 
 describe('sameImageData', () => {

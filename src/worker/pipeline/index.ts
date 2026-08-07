@@ -36,6 +36,11 @@ export function vectorize(
       const area = Math.max(...r.loops.map(l => Math.abs(polygonArea(l))))
       return { paletteIndex: seg.regionColor[r.region], area, loops }
     }))
-  const svg = stage('svg', () => assembleSvg(paths, palette, image.width, image.height))
-  return { svg, stats: { pathCount: paths.length, pointCount, timings } }
+  const svg = stage('svg', () =>
+    assembleSvg(paths, palette, image.width, image.height, {
+      mergePaths: options.mergePaths,
+      transparentBg: options.transparentBg,
+    }))
+  const pathCount = (svg.match(/<path/g) ?? []).length
+  return { svg, stats: { pathCount, pointCount, timings } }
 }

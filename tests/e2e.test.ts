@@ -37,4 +37,25 @@ describe('vectorize round-trip', () => {
       expect(svg).toContain('<path')
     }
   })
+
+  it('transparentBg circle -> single path, no background color', () => {
+    const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
+    const { svg, stats } = vectorize(img, { ...DEFAULT_OPTIONS, transparentBg: true })
+    expect(stats.pathCount).toBe(1)
+    expect(svg.match(/<path/g)!.length).toBe(1)
+  })
+
+  it('merged ring -> 2 paths (ink, paper), holes intact', () => {
+    const ring = (x: number, y: number) => {
+      const d = Math.hypot(x - 48, y - 48)
+      return d >= 18 && d <= 26
+    }
+    const img = renderShape(96, 96, ring, [20, 20, 20], [245, 245, 245])
+    const { svg, stats } = vectorize(img, { ...DEFAULT_OPTIONS, mergePaths: true })
+    expect(stats.pathCount).toBe(2)
+    // paper = 2 disjoint regions (outer annulus + inner disc): outer contributes its own
+    // border rect PLUS the ring's outer edge as a hole (2 loops), inner disc is 1 loop -> 3.
+    // ink = 1 region, outer edge + inner edge as a hole -> 2 loops. Total 3 + 2 = 5.
+    expect(svg.match(/M/g)!.length).toBe(5)
+  })
 })

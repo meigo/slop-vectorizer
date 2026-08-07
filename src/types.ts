@@ -8,12 +8,16 @@ export interface PipelineOptions {
   colorCount: number | 'auto' // 2..16 when numeric
   smoothness: number          // 0..1; scales Bézier fit tolerance
   despeckleSize: number       // regions smaller than this (px) get merged
+  mergePaths: boolean         // one <path> per palette color
+  transparentBg: boolean      // skip background-colored regions
 }
 
 export const DEFAULT_OPTIONS: PipelineOptions = {
   colorCount: 'auto',
   smoothness: 0.5,
   despeckleSize: 4,
+  mergePaths: true,
+  transparentBg: false,
 }
 
 export interface Palette {

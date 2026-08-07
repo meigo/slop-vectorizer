@@ -32,9 +32,29 @@ function loopToPath(loop: Cubic[]): string {
   return d + 'Z'
 }
 
-export function assembleSvg(paths: RegionPath[], palette: Palette, width: number, height: number): string {
-  const sorted = [...paths].sort((a, b) => b.area - a.area) // big first -> painted underneath
-  const body = sorted
+export interface SvgOptions { mergePaths: boolean; transparentBg: boolean }
+
+export function assembleSvg(
+  paths: RegionPath[], palette: Palette, width: number, height: number, opts: SvgOptions,
+): string {
+  let items: RegionPath[]
+  if (opts.mergePaths) {
+    const byColor = new Map<number, RegionPath>()
+    for (const p of paths) {
+      const g = byColor.get(p.paletteIndex)
+      if (g) { g.area += p.area; g.loops.push(...p.loops) }
+      else byColor.set(p.paletteIndex, { paletteIndex: p.paletteIndex, area: p.area, loops: [...p.loops] })
+    }
+    items = [...byColor.values()]
+  } else {
+    items = [...paths]
+  }
+  if (opts.transparentBg && paths.length > 0) {
+    const bg = paths.reduce((a, b) => (b.area > a.area ? b : a)).paletteIndex
+    items = items.filter(i => i.paletteIndex !== bg)
+  }
+  const body = items
+    .sort((a, b) => b.area - a.area)
     .map(p => `<path fill="${hex(palette.colors, p.paletteIndex)}" fill-rule="evenodd" d="${p.loops.map(loopToPath).join('')}"/>`)
     .join('\n  ')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">\n  ${body}\n</svg>\n`
