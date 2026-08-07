@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Manual QA fixtures (not committed test assets)
+fixtures/*
+!fixtures/README.md

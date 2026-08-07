@@ -74,7 +74,12 @@
   {:else}
     {#if stage}<p>Vectorizing… ({stage})</p>{/if}
     {#if notice}<p>{notice}</p>{/if}
-    {#if error}<p class="error">{error}</p>{/if}
+    {#if error}
+      <div class="toast" role="alert">
+        {error}
+        <button onclick={() => (error = null)}>×</button>
+      </div>
+    {/if}
     {#if result && image}
       <CompareView {image} svg={sizedSvg} />
     {/if}
@@ -85,5 +90,9 @@
 
 <style>
   main { max-width: 960px; margin: 0 auto; padding: 1rem; font-family: system-ui, sans-serif; }
-  .error { color: #c0392b; }
+  .toast {
+    position: fixed; bottom: 1rem; right: 1rem; background: #c0392b; color: white;
+    padding: 0.75rem 1rem; border-radius: 6px; display: flex; gap: 1rem; align-items: center;
+  }
+  .toast button { background: none; border: none; color: white; cursor: pointer; font-size: 1rem; }
 </style>
