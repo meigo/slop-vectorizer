@@ -22,6 +22,7 @@
       stage = null
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
+      if (msg === 'cancelled') return // superseded by a newer call; let that call own the UI state
       error = msg === 'undecodable' ? 'Could not decode that file — try a PNG, JPEG, GIF, or WebP.' : msg
       stage = null
     }
@@ -40,7 +41,7 @@
       <div class="raw-svg">{@html result.svg}</div>
       <pre>{JSON.stringify(result.stats, null, 2)}</pre>
     {/if}
-    <button onclick={() => { image = null; result = null; error = null }}>New image</button>
+    <button onclick={() => { client.cancel(); image = null; result = null; error = null }}>New image</button>
   {/if}
 </main>
 
