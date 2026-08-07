@@ -33,7 +33,7 @@
       const { image: img, downscaled } = await fileToRasterImage(file)
       if (downscaled) notice = 'Large image was downscaled to 4096px'
       image = img
-      result = await client.vectorize(img, DEFAULT_OPTIONS, s => (stage = s))
+      result = await client.vectorize(img, $state.snapshot(options), s => (stage = s))
       stage = null
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
