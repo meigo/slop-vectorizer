@@ -26,3 +26,4 @@ dist-ssr
 # Manual QA fixtures (not committed test assets)
 fixtures/*
 !fixtures/README.md
+temp/
