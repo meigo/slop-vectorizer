@@ -53,9 +53,23 @@ function generateBezier(pts: V[], u: number[], tHat1: V, tHat2: V): V[] {
   const det = c00 * c11 - c01 * c01
   let alpha1 = det !== 0 ? (x0 * c11 - x1 * c01) / det : 0
   let alpha2 = det !== 0 ? (c00 * x1 - c01 * x0) / det : 0
-  const segLen = norm(sub(last, first))
-  const eps = 1e-6 * segLen
-  if (alpha1 < eps || alpha2 < eps) alpha1 = alpha2 = segLen / 3 // Wu/Barsky heuristic
+  // Scale reference = polyline ARC length, not endpoint distance: the endpoints of
+  // a closed wrapped segment coincide, which zeroed the old guard and let a
+  // near-singular system emit astronomically long handles (rendered as hairline
+  // spikes across the whole image). Cap both sides: tiny/negative AND huge alphas
+  // fall back to the Wu/Barsky heuristic.
+  let arcLen = 0
+  for (let i = 1; i < n; i++) arcLen += norm(sub(pts[i], pts[i - 1]))
+  const eps = 1e-6 * arcLen
+  if (
+    !Number.isFinite(alpha1) ||
+    !Number.isFinite(alpha2) ||
+    alpha1 < eps ||
+    alpha2 < eps ||
+    alpha1 > arcLen ||
+    alpha2 > arcLen
+  )
+    alpha1 = alpha2 = arcLen / 3
   return [first, add(first, scale(tHat1, alpha1)), add(last, scale(tHat2, alpha2)), last]
 }
 
@@ -141,7 +155,28 @@ export function fitLoop(loop: Float64Array, corners: number[], maxErrorPx: numbe
     x: loop[2 * (((i % n) + n) % n)],
     y: loop[2 * (((i % n) + n) % n) + 1],
   })
-  const breaks = corners.length > 0 ? corners : [0]
+  const real = corners.length > 0
+  let breaks: number[]
+  if (real) {
+    breaks = corners
+  } else {
+    // Corner-less loops split at two artificial breaks (index 0 and the point
+    // farthest from it) instead of one wrapped segment whose endpoints coincide —
+    // the coincident-endpoint fit is the degenerate case behind control-point
+    // blowup spikes. Central-difference tangents keep the seams G1.
+    let far = 0
+    let fd = -1
+    for (let i = 1; i < n; i++) {
+      const dx = p(i).x - p(0).x
+      const dy = p(i).y - p(0).y
+      const d = dx * dx + dy * dy
+      if (d > fd) {
+        fd = d
+        far = i
+      }
+    }
+    breaks = far > 0 ? [0, far] : [0]
+  }
   const errSq = maxErrorPx * maxErrorPx
   const out: Cubic[] = []
   for (let b = 0; b < breaks.length; b++) {
@@ -150,16 +185,15 @@ export function fitLoop(loop: Float64Array, corners: number[], maxErrorPx: numbe
     const len = (i1 - i0 + n) % n || n
     const seg: V[] = []
     for (let i = 0; i <= len; i++) seg.push(p(i0 + i))
-    // End tangents: one-sided at true corners; central-difference at the artificial
-    // break of an all-smooth loop (G1 across the seam).
+    // End tangents: one-sided at true corners; central-difference at the two
+    // artificial breaks of an all-smooth loop (G1 across both seams).
     let tHat1: V, tHat2: V
-    if (corners.length > 0) {
+    if (real) {
       tHat1 = normalize(sub(seg[1], seg[0]))
       tHat2 = normalize(sub(seg[seg.length - 2], seg[seg.length - 1]))
     } else {
-      const t = normalize(sub(p(i0 + 1), p(i0 - 1)))
-      tHat1 = t
-      tHat2 = scale(t, -1)
+      tHat1 = normalize(sub(p(i0 + 1), p(i0 - 1)))
+      tHat2 = scale(normalize(sub(p(i1 + 1), p(i1 - 1))), -1)
     }
     fitCubic(seg, tHat1, tHat2, errSq, out)
   }

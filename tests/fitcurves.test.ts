@@ -58,3 +58,44 @@ describe('fitLoop', () => {
     expect(cubics.length).toBe(4)
   })
 })
+
+describe('control point blowup regression', () => {
+  const contained = (loop: Float64Array, tol: number, factor: number) => {
+    const n = loop.length / 2
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity
+    for (let i = 0; i < n; i++) {
+      minX = Math.min(minX, loop[2 * i])
+      maxX = Math.max(maxX, loop[2 * i])
+      minY = Math.min(minY, loop[2 * i + 1])
+      maxY = Math.max(maxY, loop[2 * i + 1])
+    }
+    const diam = Math.max(maxX - minX, maxY - minY, 0.5)
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    for (const c of fitLoop(loop, [], tol))
+      for (let k = 0; k < 8; k += 2)
+        expect(Math.hypot(c[k] - cx, c[k + 1] - cy)).toBeLessThan(diam * factor)
+  }
+
+  it('4-point speck (fuzz worst case: 1.28M× blowup) stays contained', () => {
+    contained(new Float64Array([0.12, 1.34, 1.92, 0.4, 0.07, 1.51, 1.15, 2.56]), 1.0, 10)
+  })
+
+  it('thin sliver specks stay contained', () => {
+    contained(
+      new Float64Array([
+        2.41, 0.23, 2.94, 0.25, 0.19, 0.44, 0.95, 0.34, 2.87, 0.45, 2.51, 0.06, 1.01, 0.3,
+      ]),
+      0.25,
+      10,
+    )
+    contained(
+      new Float64Array([2.75, 0.41, 0.19, 0.29, 2.82, 0.37, 1.25, 0.34, 0.58, 0.09]),
+      2.0,
+      10,
+    )
+  })
+})
