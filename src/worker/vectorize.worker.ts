@@ -6,13 +6,13 @@ import type {
   WorkerResponse,
   Palette,
   Segmentation,
-  RegionLoops,
+  Boundaries,
   PipelineStats,
 } from '../types'
 import { preprocess, isIdentityPre, type PreOptions } from './pipeline/preprocess'
 import { estimatePalette } from './pipeline/palette'
 import { segmentImage } from './pipeline/segment'
-import { extractBoundaries } from './pipeline/boundaries'
+import { extractBoundaries, loopPointsOf } from './pipeline/boundaries'
 import { findCorners } from './pipeline/corners'
 import { fitLoop, type Cubic } from './pipeline/fitcurves'
 import { assembleSvg, polygonArea, type RegionPath } from './pipeline/svg'
@@ -46,7 +46,8 @@ interface Cache {
   palPre?: RasterImage // palette source with current pre-effects applied
   palette?: Palette
   seg?: Segmentation
-  bounds?: RegionLoops[]
+  bounds?: Boundaries
+  loopPts?: Float64Array[][] // per region, per loop: the assembled raw polyline
   corners?: number[][][]
 }
 const cache: Cache = { image: null, options: null }
@@ -119,20 +120,23 @@ function run(
     )
   if (fromIdx <= ORDER.indexOf('boundaries') || !cache.bounds) {
     cache.bounds = stage('boundaries', () => extractBoundaries(src, cache.seg!, cache.palette!))
+    cache.loopPts = cache.bounds.regions.map((r) =>
+      r.loops.map((refs) => loopPointsOf(cache.bounds!.arcs, refs)),
+    )
     cache.corners = stage('corners', () =>
-      cache.bounds!.map((r) => r.loops.map((l) => findCorners(l))),
+      cache.loopPts!.map((ls) => ls.map((l) => findCorners(l))),
     )
   }
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
   const paths = stage('fit', () =>
-    cache.bounds!.map((r, ri): RegionPath => {
-      const loops: Cubic[][] = r.loops.map((l, li) => {
+    cache.bounds!.regions.map((r, ri): RegionPath => {
+      const loops: Cubic[][] = cache.loopPts![ri].map((l, li) => {
         const cubics = fitLoop(l, cache.corners![ri][li], maxErrorPx)
         pointCount += cubics.length * 3 + 1
         return cubics
       })
-      const area = Math.max(...r.loops.map((l) => Math.abs(polygonArea(l))))
+      const area = Math.max(...cache.loopPts![ri].map((l) => Math.abs(polygonArea(l))))
       return { paletteIndex: cache.seg!.regionColor[r.region], area, loops }
     }),
   )

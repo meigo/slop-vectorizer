@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { estimatePalette } from '../src/worker/pipeline/palette'
 import { segmentImage } from '../src/worker/pipeline/segment'
-import { extractBoundaries } from '../src/worker/pipeline/boundaries'
+import { extractBoundaries, loopPointsOf } from '../src/worker/pipeline/boundaries'
 import { findCorners } from '../src/worker/pipeline/corners'
 import { renderShape, insideCircle, insideRotSquare } from './helpers/render'
 
@@ -10,8 +10,8 @@ function shapeLoop(inside: (x: number, y: number) => boolean): Float64Array {
   const pal = estimatePalette(img, 2)
   const seg = segmentImage(img, pal, 4)
   const all = extractBoundaries(img, seg, pal)
-  const shape = all.find((r) => seg.regionSize[r.region] < (96 * 96) / 2)!
-  return shape.loops[0]
+  const shape = all.regions.find((r) => seg.regionSize[r.region] < (96 * 96) / 2)!
+  return loopPointsOf(all.arcs, shape.loops[0])
 }
 
 describe('findCorners', () => {

@@ -1,4 +1,12 @@
-import type { RasterImage, Palette, Segmentation, RegionLoops } from '../../types'
+import type {
+  RasterImage,
+  Palette,
+  Segmentation,
+  Boundaries,
+  BoundaryArc,
+  ArcRef,
+  RegionArcs,
+} from '../../types'
 
 // Directed boundary edges on the integer lattice, region kept on the LEFT while walking.
 // Vertex ids: v = y * (w+1) + x for lattice point (x, y).
@@ -7,7 +15,7 @@ export function extractBoundaries(
   image: RasterImage,
   seg: Segmentation,
   palette: Palette,
-): RegionLoops[] {
+): Boundaries {
   const { width: w, height: h } = image
   const { labelMap } = seg
   const lab = (x: number, y: number) =>
@@ -105,9 +113,35 @@ export function extractBoundaries(
   // separate regions and have no choice but to hug their own quadrant; this region must
   // therefore pass straight through the vertex, which is what preferring the left turn does.
   // Hugging instead (sharpest right) would make the two sides' outlines cross.
-  const results: RegionLoops[] = []
+  //
+  // Each loop is then cut at its junction vertices (where the neighbouring region
+  // changes) into arcs. A junction is a property of the lattice vertex, not of the
+  // region reading it: at a vertex of degree 2, or of degree 4 where two quadrants
+  // share a region, every incident pass keeps the same neighbour across it; at
+  // degree 3, or degree 4 with four distinct regions, every incident pass changes
+  // neighbour. So both sides of a shared boundary cut it at the same vertices, the
+  // arcs partition the undirected boundary edges, and an arc's minimum edge id
+  // identifies it from either side.
+  const arcs: BoundaryArc[] = []
+  const arcByKey = new Map<number, number>() // min edge id -> arc index
+  const vertX = (v: number) => v % (w + 1)
+  const vertY = (v: number) => (v / (w + 1)) | 0
+  /** Store the arc under its identity, or reference the copy the other side stored. */
+  const emit = (minEdge: number, points: Float64Array, closed: boolean): ArcRef => {
+    const existing = arcByKey.get(minEdge)
+    if (existing === undefined) {
+      const idx = arcs.push({ points, closed }) - 1
+      arcByKey.set(minEdge, idx)
+      return { arc: idx, reversed: false }
+    }
+    if (arcs[existing].points.length !== points.length || arcs[existing].closed !== closed)
+      throw new Error('boundaries: shared arc split differently by its two sides (bug)')
+    return { arc: existing, reversed: true }
+  }
+
+  const results: RegionArcs[] = []
   for (const [region, edges] of perRegion) {
-    const loops: Float64Array[] = []
+    const loops: ArcRef[][] = []
     for (const [start, ends] of edges) {
       while (ends.length > 0) {
         const verts: number[] = [start]
@@ -138,36 +172,112 @@ export function extractBoundaries(
           prev = cur
           cur = outs.splice(pick, 1)[0]
         }
-        // Convert lattice-vertex loop -> refined midpoints of consecutive edges
-        const pts: number[] = []
-        for (let i = 0; i < verts.length; i++) {
+        // Per lattice edge of the loop: neighbouring region, undirected edge id, refined midpoint
+        const m = verts.length
+        const nbr = new Int32Array(m)
+        const eid = new Int32Array(m)
+        const mid = new Float64Array(2 * m)
+        for (let i = 0; i < m; i++) {
           const a = verts[i],
-            b = verts[(i + 1) % verts.length]
-          const axv = a % (w + 1),
-            ayv = (a / (w + 1)) | 0
-          const bxv = b % (w + 1),
-            byv = (b / (w + 1)) | 0
+            b = verts[(i + 1) % m]
+          const axv = vertX(a),
+            ayv = vertY(a)
+          const bxv = vertX(b),
+            byv = vertY(b)
           // The two pixels flanking this lattice edge:
-          let p: [number, number], q: [number, number]
+          let p: [number, number], q: [number, number], id: number
           if (ayv === byv) {
             // horizontal edge: pixels above/below
             const ex = Math.min(axv, bxv)
             p = [ex, ayv - 1]
             q = [ex, ayv]
+            id = V(ex, ayv) * 2
           } else {
             // vertical edge: pixels left/right
             const ey = Math.min(ayv, byv)
             p = [axv - 1, ey]
             q = [axv, ey]
+            id = V(axv, ey) * 2 + 1
           }
+          const lp = lab(...p),
+            lq = lab(...q)
+          nbr[i] = lp === region ? lq : lp
+          eid[i] = id
           const inImg = (px: number, py: number) => px >= 0 && py >= 0 && px < w && py < h
-          if (inImg(...p) && inImg(...q)) pts.push(...refineEdge(p[0], p[1], q[0], q[1]))
-          else pts.push((axv + bxv) / 2, (ayv + byv) / 2) // image border: keep lattice midpoint
+          if (inImg(...p) && inImg(...q)) {
+            const [rx, ry] = refineEdge(p[0], p[1], q[0], q[1])
+            mid[2 * i] = rx
+            mid[2 * i + 1] = ry
+          } else {
+            mid[2 * i] = (axv + bxv) / 2 // image border: keep lattice midpoint
+            mid[2 * i + 1] = (ayv + byv) / 2
+          }
         }
-        loops.push(new Float64Array(pts))
+        // Cut the loop into arcs at the vertices where the neighbouring region changes
+        let startI = -1
+        for (let i = 0; i < m; i++)
+          if (nbr[i] !== nbr[(i - 1 + m) % m]) {
+            startI = i
+            break
+          }
+        const loopRefs: ArcRef[] = []
+        if (startI < 0) {
+          // one neighbour all the way round: a single closed arc, no junction points
+          let minE = Infinity
+          for (let i = 0; i < m; i++) minE = Math.min(minE, eid[i])
+          loopRefs.push(emit(minE, mid.slice(), true))
+        } else {
+          let i = startI
+          do {
+            const runNbr = nbr[i]
+            const pts: number[] = [vertX(verts[i]), vertY(verts[i])] // start junction
+            let minE = Infinity
+            let j = i
+            do {
+              pts.push(mid[2 * j], mid[2 * j + 1])
+              minE = Math.min(minE, eid[j])
+              j = (j + 1) % m
+            } while (nbr[j] === runNbr && j !== startI)
+            pts.push(vertX(verts[j]), vertY(verts[j])) // end junction
+            loopRefs.push(emit(minE, new Float64Array(pts), false))
+            i = j
+          } while (i !== startI)
+        }
+        loops.push(loopRefs)
       }
     }
     results.push({ region, loops })
   }
-  return results
+  return { arcs, regions: results }
+}
+
+function reversePts(p: Float64Array): Float64Array {
+  const n = p.length / 2
+  const out = new Float64Array(p.length)
+  for (let i = 0; i < n; i++) {
+    out[2 * i] = p[2 * (n - 1 - i)]
+    out[2 * i + 1] = p[2 * (n - 1 - i) + 1]
+  }
+  return out
+}
+
+/**
+ * Reassemble one loop's raw polyline from its arcs, in this region's traversal
+ * direction. Each arc contributes everything but its first point: that start junction
+ * is the previous arc's end junction, and the loop's opening junction comes from the
+ * last arc's end. So every junction appears exactly once and the loop has no
+ * duplicated closing point.
+ */
+export function loopPointsOf(arcs: BoundaryArc[], loop: ArcRef[]): Float64Array {
+  if (loop.length === 1 && arcs[loop[0].arc].closed) {
+    const p = arcs[loop[0].arc].points
+    return loop[0].reversed ? reversePts(p) : p.slice()
+  }
+  const out: number[] = []
+  for (const ref of loop) {
+    const p = arcs[ref.arc].points
+    const pts = ref.reversed ? reversePts(p) : p
+    for (let i = 2; i < pts.length; i += 2) out.push(pts[i], pts[i + 1])
+  }
+  return new Float64Array(out)
 }

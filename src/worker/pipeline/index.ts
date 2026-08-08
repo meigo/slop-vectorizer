@@ -8,7 +8,7 @@ import type {
 import { preprocess, isIdentityPre, type PreOptions } from './preprocess'
 import { estimatePalette } from './palette'
 import { segmentImage } from './segment'
-import { extractBoundaries } from './boundaries'
+import { extractBoundaries, loopPointsOf } from './boundaries'
 import { findCorners } from './corners'
 import { fitLoop, type Cubic } from './fitcurves'
 import { assembleSvg, polygonArea, type RegionPath } from './svg'
@@ -50,19 +50,18 @@ export function vectorize(
     segmentImage(src, palette, options.despeckleSize, options.gapClosing),
   )
   const bounds = stage('boundaries', () => extractBoundaries(src, seg, palette))
-  const cornersPerLoop = stage('corners', () =>
-    bounds.map((r) => r.loops.map((l) => findCorners(l))),
-  )
+  const loopPts = bounds.regions.map((r) => r.loops.map((refs) => loopPointsOf(bounds.arcs, refs)))
+  const cornersPerLoop = stage('corners', () => loopPts.map((ls) => ls.map((l) => findCorners(l))))
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
   const paths = stage('fit', () =>
-    bounds.map((r, ri): RegionPath => {
-      const loops: Cubic[][] = r.loops.map((l, li) => {
+    bounds.regions.map((r, ri): RegionPath => {
+      const loops: Cubic[][] = loopPts[ri].map((l, li) => {
         const cubics = fitLoop(l, cornersPerLoop[ri][li], maxErrorPx)
         pointCount += cubics.length * 3 + 1
         return cubics
       })
-      const area = Math.max(...r.loops.map((l) => Math.abs(polygonArea(l))))
+      const area = Math.max(...loopPts[ri].map((l) => Math.abs(polygonArea(l))))
       return { paletteIndex: seg.regionColor[r.region], area, loops }
     }),
   )

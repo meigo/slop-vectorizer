@@ -46,9 +46,29 @@ export interface Segmentation {
   regionCount: number
 }
 
-export interface RegionLoops {
+/**
+ * A maximal run of boundary edges shared by the same pair of regions. Stored once,
+ * so both sides fit identical geometry. Open arcs run junction-to-junction; a closed
+ * arc is a whole loop whose neighbor never changes.
+ */
+export interface BoundaryArc {
+  points: Float64Array // interleaved x,y in canonical (first-traversal) direction
+  closed: boolean // true: full loop (blob/border loop), no junction endpoints
+}
+
+export interface ArcRef {
+  arc: number // index into Boundaries.arcs
+  reversed: boolean // this region traverses the arc against stored direction
+}
+
+export interface RegionArcs {
   region: number
-  loops: Float64Array[] // interleaved x,y; implicitly closed
+  loops: ArcRef[][] // one ArcRef list per boundary loop, in traversal order
+}
+
+export interface Boundaries {
+  arcs: BoundaryArc[]
+  regions: RegionArcs[]
 }
 
 export type StageName = 'pre' | 'palette' | 'segment' | 'boundaries' | 'corners' | 'fit' | 'svg'
