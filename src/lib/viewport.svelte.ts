@@ -4,8 +4,11 @@ export class Viewport {
   zoom = $state(1)
   panX = $state(0)
   panY = $state(0)
+  // True after a manual zoom/pan; cleared by fitTo() so fits re-arm auto-refit.
+  touched = $state(false)
 
   wheelAt(cx: number, cy: number, deltaY: number): void {
+    this.touched = true
     const factor = Math.exp(-deltaY * 0.002)
     const next = Math.min(64, Math.max(0.1, this.zoom * factor))
     this.panX = cx - (cx - this.panX) * (next / this.zoom)
@@ -14,6 +17,7 @@ export class Viewport {
   }
 
   panBy(dx: number, dy: number): void {
+    this.touched = true
     this.panX += dx
     this.panY += dy
   }
@@ -23,5 +27,6 @@ export class Viewport {
     this.zoom = f.zoom
     this.panX = f.panX
     this.panY = f.panY
+    this.touched = false
   }
 }

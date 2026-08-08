@@ -53,6 +53,12 @@
     fittedW = img.width; fittedH = img.height
     fit()
   })
+  // Auto-refit on pane-geometry changes (window resize, mode/column flips) until
+  // the user manually zooms/pans; Fit and new-image fits re-arm via fitTo().
+  $effect(() => {
+    void viewsW; void viewsH; void twoColumn
+    if (!viewport.touched && displayImage && viewsW > 0) fit()
+  })
 
   async function decodeAndRun(file: Blob) {
     error = null; notice = null; result = null; stage = null
