@@ -21,8 +21,9 @@ when a solid parent extends beneath a counter). Cache tier: `'fit'` fallthrough 
 ## Pipeline (fit + svg stages only)
 
 - **Outer loop only:** per region, emit only its largest-|polygonArea| loop (regions are 4-connected
-  components ⇒ exactly one outer loop; the rest are holes). Hole loops are not fitted at all
-  (skipped work). Loop polylines come from `loopPointsOf` as today.
+  components ⇒ exactly one outer loop; the rest are holes). A used-arc guard skips fitting arcs no
+  kept loop references — in practice every arc is the inner side's outer loop, so the win is in
+  serialization, not fitting. Loop polylines come from `loopPointsOf` as today.
 - **Stack order:** regions sorted ascending by the row-major index of their first pixel in
   `seg.labelMap` (one O(n) scan, only when stacked is on). If B contains A, B's first pixel precedes
   A's ⇒ containers always paint first; siblings follow scan order (harmless — solid siblings don't

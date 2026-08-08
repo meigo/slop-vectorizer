@@ -149,7 +149,8 @@ function run(
     // Each arc is fitted once, in its stored direction; the region that traverses it
     // backwards reuses the same cubics reversed exactly, so a shared boundary is the
     // same curve on both sides by construction. Stacked mode keeps only each region's
-    // outer loop, so hole-only arcs are never fitted.
+    // outer loop; the used-set guard skips arcs no kept loop references (in practice
+    // every arc is the inner side's outer loop, so this is purely defensive).
     const used = stacked ? new Set<number>() : null
     if (used)
       cache.bounds!.regions.forEach((r, ri) => {
