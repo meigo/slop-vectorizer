@@ -3,11 +3,17 @@
   import Dropzone from './lib/Dropzone.svelte'
   import CompareView from './lib/CompareView.svelte'
   import Controls from './lib/Controls.svelte'
+  import ImagePane from './lib/ImagePane.svelte'
+  import { Viewport } from './lib/viewport.svelte'
   import { VectorizerClient } from './lib/workerClient'
   import { fileToRasterImage } from './lib/decode'
   import { DEFAULT_OPTIONS, type ClientResult, type RasterImage, type StageName } from './types'
 
   const client = new VectorizerClient()
+  const viewport = new Viewport()
+  let mode = $state<'side' | 'split'>('side')
+  let viewsW = $state(0), viewsH = $state(0)
+  let fittedW = 0, fittedH = 0
   let sourceFile = $state<Blob | null>(null)
   let upscale = $state<1 | 2 | 3>(1)
   let image = $state<RasterImage | null>(null)
@@ -31,6 +37,19 @@
   const sizedSvg = $derived(
     result && image ? result.svg.replace('<svg ', `<svg width="${image.width}" height="${image.height}" `) : ''
   )
+
+  function paneW(): number { return mode === 'side' ? (viewsW - 2) / 2 : viewsW }
+  function fit() {
+    const img = displayImage
+    if (img) viewport.fitTo(paneW(), viewsH, img.width, img.height)
+  }
+  $effect(() => { // fit on image-dimension change only, so pan/zoom survive slider drags
+    const img = displayImage
+    if (!img || viewsW === 0) return
+    if (img.width === fittedW && img.height === fittedH) return
+    fittedW = img.width; fittedH = img.height
+    fit()
+  })
 
   async function decodeAndRun(file: Blob) {
     error = null; notice = null; result = null; stage = null
@@ -81,29 +100,50 @@
   }
 </script>
 
-<main>
-  <h1>slop-vectorizer</h1>
-  {#if !image}
+{#if !image}
+  <main class="empty">
     <Dropzone onfile={handleFile} {error} />
-  {:else}
-    {#if stage}<p>Vectorizing… ({stage})</p>{/if}
-    {#if notice}<p>{notice}</p>{/if}
-    {#if error}
-      <div class="toast" role="alert">
-        {error}
-        <button onclick={() => (error = null)}>×</button>
+  </main>
+{:else}
+  <div class="app-grid">
+    <div class="views" class:side={mode === 'side'}
+         bind:clientWidth={viewsW} bind:clientHeight={viewsH}>
+      {#if mode === 'side'}
+        <ImagePane image={displayImage} label="Original" {viewport} />
+        <ImagePane svg={result ? sizedSvg : null} label="SVG" {viewport} />
+      {:else if result && displayImage}
+        <CompareView image={displayImage} svg={sizedSvg} {viewport} />
+      {/if}
+    </div>
+    <aside class="panel">
+      {#if stage}<p>Vectorizing… ({stage})</p>{/if}
+      {#if notice}<p>{notice}</p>{/if}
+      <!-- TEMPORARY until Task 3: -->
+      <div class="view-controls">
+        <button onclick={() => (mode = 'side')} disabled={mode === 'side'}>Side by side</button>
+        <button onclick={() => (mode = 'split')} disabled={mode === 'split'}>Split</button>
+        <button onclick={fit}>Fit</button>
       </div>
-    {/if}
-    {#if result && displayImage}
-      <CompareView image={displayImage} svg={sizedSvg} />
-    {/if}
-    <Controls bind:options bind:upscale {stats} svg={result?.svg ?? null} onchange={rerun} onupscale={handleUpscale} />
-    <button onclick={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null }}>New image</button>
+      <Controls bind:options bind:upscale {stats} svg={result?.svg ?? null} onchange={rerun} onupscale={handleUpscale} />
+      <button onclick={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null }}>New image</button>
+    </aside>
+  </div>
+  {#if error}
+    <div class="toast" role="alert">
+      {error}
+      <button onclick={() => (error = null)}>×</button>
+    </div>
   {/if}
-</main>
+{/if}
 
 <style>
-  main { max-width: 960px; margin: 0 auto; padding: 1rem; font-family: system-ui, sans-serif; }
+  :global(html), :global(body), :global(#app) { height: 100%; margin: 0; }
+  .app-grid { display: grid; grid-template-columns: 1fr 300px; height: 100vh; }
+  .views { display: grid; min-width: 0; }
+  .views.side { grid-template-columns: 1fr 1fr; gap: 2px; }
+  .panel { overflow-y: auto; border-left: 1px solid #ddd; padding: 0.75rem; font-family: system-ui, sans-serif; }
+  .empty { height: 100vh; display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; }
+  .view-controls { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
   .toast {
     position: fixed; bottom: 1rem; right: 1rem; background: #c0392b; color: white;
     padding: 0.75rem 1rem; border-radius: 6px; display: flex; gap: 1rem; align-items: center;

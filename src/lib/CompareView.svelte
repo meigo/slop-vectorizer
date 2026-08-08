@@ -1,19 +1,16 @@
 <!-- src/lib/CompareView.svelte -->
 <script lang="ts">
   import type { RasterImage } from '../types'
+  import type { Viewport } from './viewport.svelte'
 
-  let { image, svg }: { image: RasterImage; svg: string } = $props()
+  let { image, svg, viewport }: { image: RasterImage; svg: string; viewport: Viewport } = $props()
 
-  let zoom = $state(1)
-  let panX = $state(0)
-  let panY = $state(0)
   let divider = $state(50) // percent
   let container: HTMLDivElement
   let canvas = $state<HTMLCanvasElement | null>(null)
   let panning = false
   let draggingDivider = false
   let lastX = 0, lastY = 0
-  let fittedW = 0, fittedH = 0
 
   $effect(() => {
     if (!canvas) return
@@ -23,29 +20,10 @@
     ctx.putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
   })
 
-  // Fit and center whenever the image dimensions change (same dims, e.g. a pre-effect
-  // slider drag or upscale re-decode at the same size, keeps the current view).
-  $effect(() => {
-    const { width, height } = image
-    if (!container) return
-    if (width === fittedW && height === fittedH) return
-    fittedW = width; fittedH = height
-    const cw = container.clientWidth, ch = container.clientHeight
-    const z = Math.min(1, cw / width, ch / height)
-    zoom = z
-    panX = (cw - width * z) / 2
-    panY = (ch - height * z) / 2
-  })
-
   function wheel(e: WheelEvent) {
     e.preventDefault()
     const rect = container.getBoundingClientRect()
-    const cx = e.clientX - rect.left, cy = e.clientY - rect.top
-    const factor = Math.exp(-e.deltaY * 0.002)
-    const next = Math.min(64, Math.max(0.1, zoom * factor))
-    panX = cx - (cx - panX) * (next / zoom)
-    panY = cy - (cy - panY) * (next / zoom)
-    zoom = next
+    viewport.wheelAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY)
   }
   function down(e: PointerEvent) {
     panning = true; lastX = e.clientX; lastY = e.clientY
@@ -56,7 +34,7 @@
       const rect = container.getBoundingClientRect()
       divider = Math.min(98, Math.max(2, ((e.clientX - rect.left) / rect.width) * 100))
     } else if (panning) {
-      panX += e.clientX - lastX; panY += e.clientY - lastY
+      viewport.panBy(e.clientX - lastX, e.clientY - lastY)
       lastX = e.clientX; lastY = e.clientY
     }
   }
@@ -71,12 +49,12 @@
   <!-- clip-path lives on an UNtransformed wrapper so it stays in screen space
        (aligned with the divider line); the transform is on the inner layer. -->
   <div class="clip" style:clip-path={`inset(0 ${100 - divider}% 0 0)`}>
-    <div class="layer" style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}>
+    <div class="layer" style:transform={`translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`}>
       <canvas bind:this={canvas} style:image-rendering="pixelated"></canvas>
     </div>
   </div>
   <div class="clip" style:clip-path={`inset(0 0 0 ${divider}%)`}>
-    <div class="layer" style:transform={`translate(${panX}px, ${panY}px) scale(${zoom})`}>
+    <div class="layer" style:transform={`translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`}>
       {@html svg}
     </div>
   </div>
@@ -88,9 +66,8 @@
 
 <style>
   .compare {
-    position: relative; overflow: hidden; height: 70vh;
-    border: 1px solid #ddd; border-radius: 8px; background:
-      repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;
+    position: relative; overflow: hidden; height: 100%;
+    background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;
     touch-action: none; cursor: grab;
   }
   .clip { position: absolute; inset: 0; }
