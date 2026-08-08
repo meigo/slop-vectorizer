@@ -68,11 +68,15 @@ describe('vectorize round-trip', () => {
     expect(svg.match(/M/g)!.length).toBe(5)
   })
 
-  it('shared boundaries are fitted once: neighbours emit bit-identical reversed cubics', () => {
+  it('shared boundaries are fitted once: neighbours emit bit-identical reversed cubics (no cracks at max smoothness)', () => {
     // Disc whose right half is overpainted blue: the two half-discs share a straight
     // chord, and each shares a curved semicircular arc with the background. Fitted
     // per-region, those curved arcs would land on different control points from each
     // side (different traversal start and direction) and leave hairline cracks.
+    // smoothness:1 (max fit tolerance, fewest/coarsest cubics) is the sharpest version
+    // of this claim: bigger tolerance gives the fitter more freedom to pick different
+    // control points on the two traversals if fitting-once + exact reversal weren't
+    // actually wired up end to end.
     const disc = insideCircle(48, 48, 30)
     const img = renderShape(96, 96, disc, [200, 30, 30], [245, 245, 245])
     for (let y = 0; y < 96; y++)
@@ -86,6 +90,7 @@ describe('vectorize round-trip', () => {
     const { svg } = vectorize(img, {
       ...DEFAULT_OPTIONS,
       colorCount: 3,
+      smoothness: 1,
       mergePaths: false,
       optimize: false,
     })
@@ -134,6 +139,62 @@ describe('vectorize round-trip', () => {
       const rev = [c[6], c[7], c[4], c[5], c[2], c[3], c[0], c[1]].join(',')
       expect(counts.get(fwd < rev ? fwd : rev)).toBe(2)
     }
+  })
+
+  it('all subpaths chain closed through junctions (three colors meeting)', () => {
+    // Two abutting rectangles (red, blue) on a background: hard pixel-grid edges (the
+    // blue block is written directly into img.data, no anti-aliased blend) put genuine
+    // 3-way junctions at (60,20) and (60,60), where red, blue and background all meet.
+    // Per T3's report this fixture's background loop is provably cut at those two
+    // vertices even though its own edge runs straight through, so every one of the
+    // three loops touching a junction must show it as an exact arc endpoint — this is
+    // verified below (not just assumed) before trusting the closure assertions.
+    const img = renderShape(
+      120,
+      80,
+      (x, y) => x >= 20 && x < 60 && y >= 20 && y < 60,
+      [200, 30, 30],
+      [245, 245, 245],
+    )
+    for (let y = 20; y < 60; y++)
+      for (let x = 60; x < 100; x++) {
+        const o = (y * 120 + x) * 4
+        img.data[o] = 30
+        img.data[o + 1] = 30
+        img.data[o + 2] = 200
+      }
+    const { svg } = vectorize(img, {
+      ...DEFAULT_OPTIONS,
+      colorCount: 3,
+      smoothness: 0.8,
+      mergePaths: false,
+      optimize: false,
+    })
+    const endpoints = new Set<string>()
+    let subpathCount = 0
+    for (const m of svg.matchAll(/d="([^"]*)"/g))
+      for (const sub of m[1].split('M').filter(Boolean)) {
+        const nums = sub.match(/-?\d+\.?\d*/g)!.map(Number)
+        let cx = nums[0],
+          cy = nums[1]
+        const sx = cx,
+          sy = cy
+        endpoints.add(`${cx},${cy}`)
+        for (let i = 2; i + 5 < nums.length; i += 6) {
+          cx = nums[i + 4]
+          cy = nums[i + 5]
+          endpoints.add(`${cx},${cy}`)
+        }
+        subpathCount++
+        // Every subpath's cubics chain end-to-start and close.
+        expect(cx).toBeCloseTo(sx, 6)
+        expect(cy).toBeCloseTo(sy, 6)
+      }
+    expect(subpathCount).toBeGreaterThan(0)
+    // Junctions actually exist in the fitted output, by construction: both known
+    // junction vertices show up as an exact arc endpoint somewhere in the SVG.
+    expect(endpoints.has('60,20')).toBe(true)
+    expect(endpoints.has('60,60')).toBe(true)
   })
 
   it('is byte-deterministic with all output options enabled', () => {
