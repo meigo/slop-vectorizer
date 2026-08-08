@@ -68,3 +68,7 @@ Worker result gains optional `preImage?: RasterImage`, included only when pre-ef
 ## Out of scope
 
 Sharpen/brightness/contrast effects, hysteresis/connectivity-based segmentation (rejected — see status note), per-effect on/off toggles (identity values serve as off), persisting settings across sessions.
+
+## Addendum (v1.3.2): gap-closing range scales with upscale
+
+The gap-closing slider max becomes `3 × upscale` (×1 → 3, ×2 → 6, ×3 → 9; step 1; units remain working-image pixels, matching Despeckle). Rationale: upscaling multiplies the pixel span of a physical gap, so a fixed cap of 3 shrinks the bridgeable physical gap at ×2/×3; scaling the cap keeps "max ~6px bridge at native scale" invariant. The pipeline safety clamp in segment.ts rises from 3 to 9 (absolute ceiling). Lowering upscale clamps `options.gapClosing` down to the new max before re-decode, so an out-of-range value never survives invisibly. Accepted cost: the O(n·r) closing pass is slower at r=9 on large images (opt-in, cached behind the segment tier).
