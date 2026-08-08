@@ -90,8 +90,18 @@
     }}
     onpointermove={move}
     onpointerup={up}
-    role="separator"
+    onkeydown={(e) => {
+      if (e.key === 'ArrowLeft') divider = Math.max(2, divider - 2)
+      else if (e.key === 'ArrowRight') divider = Math.min(98, divider + 2)
+      else return
+      e.preventDefault()
+    }}
+    role="slider"
     aria-label="Comparison divider"
+    aria-orientation="vertical"
+    aria-valuenow={Math.round(divider)}
+    aria-valuemin={2}
+    aria-valuemax={98}
     tabindex="0"
   ></div>
 </div>
