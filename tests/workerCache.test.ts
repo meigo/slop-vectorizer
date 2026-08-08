@@ -25,6 +25,8 @@ describe('firstDirtyStage', () => {
     expect(firstDirtyStage(base, { ...base, blackPoint: 40 }, true)).toBe('pre'))
   it('blurRadius change -> pre', () =>
     expect(firstDirtyStage(base, { ...base, blurRadius: 2 }, true)).toBe('pre'))
+  it('gapClosing change -> segment', () =>
+    expect(firstDirtyStage(base, { ...base, gapClosing: 2 }, true)).toBe('segment'))
 })
 
 describe('sameImageData', () => {

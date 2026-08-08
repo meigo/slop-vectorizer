@@ -19,7 +19,7 @@ export function firstDirtyStage(
   if (prev.blackPoint !== next.blackPoint || prev.whitePoint !== next.whitePoint ||
       prev.blurRadius !== next.blurRadius || prev.saturation !== next.saturation) return 'pre'
   if (prev.colorCount !== next.colorCount) return 'palette'
-  if (prev.despeckleSize !== next.despeckleSize) return 'segment'
+  if (prev.despeckleSize !== next.despeckleSize || prev.gapClosing !== next.gapClosing) return 'segment'
   return 'fit' // smoothness (or nothing) changed; fit+svg are cheap
 }
 
@@ -53,7 +53,7 @@ function run(image: RasterImage, options: PipelineOptions, post: (m: WorkerRespo
   if (fromIdx <= ORDER.indexOf('palette') || !cache.palette)
     cache.palette = stage('palette', () => estimatePalette(src, options.colorCount))
   if (fromIdx <= ORDER.indexOf('segment') || !cache.seg)
-    cache.seg = stage('segment', () => segmentImage(src, cache.palette!, options.despeckleSize))
+    cache.seg = stage('segment', () => segmentImage(src, cache.palette!, options.despeckleSize, options.gapClosing))
   if (fromIdx <= ORDER.indexOf('boundaries') || !cache.bounds) {
     cache.bounds = stage('boundaries', () => extractBoundaries(src, cache.seg!, cache.palette!))
     cache.corners = stage('corners', () => cache.bounds!.map(r => r.loops.map(l => findCorners(l))))

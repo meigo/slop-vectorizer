@@ -15,6 +15,7 @@ export interface PipelineOptions {
   whitePoint: number          // levels white point, 0..255
   blurRadius: number          // pre-blur box radius, px
   saturation: number          // 1 = unchanged
+  gapClosing: number          // 0–3 px, bridges dashed thin strokes
 }
 
 export const DEFAULT_OPTIONS: PipelineOptions = {
@@ -28,6 +29,7 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
   whitePoint: 255,
   blurRadius: 0,
   saturation: 1,
+  gapClosing: 0,
 }
 
 export interface Palette {

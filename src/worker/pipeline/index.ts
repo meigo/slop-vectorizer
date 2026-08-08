@@ -26,7 +26,7 @@ export function vectorize(
   }
   const src = isIdentityPre(preOpts) ? image : stage('pre', () => preprocess(image, preOpts))
   const palette = stage('palette', () => estimatePalette(src, options.colorCount))
-  const seg = stage('segment', () => segmentImage(src, palette, options.despeckleSize))
+  const seg = stage('segment', () => segmentImage(src, palette, options.despeckleSize, options.gapClosing))
   const bounds = stage('boundaries', () => extractBoundaries(src, seg, palette))
   const cornersPerLoop = stage('corners', () =>
     bounds.map(r => r.loops.map(l => findCorners(l))))
