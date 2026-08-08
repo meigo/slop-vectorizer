@@ -19,6 +19,8 @@ describe('firstDirtyStage', () => {
     expect(firstDirtyStage(base, { ...base, mergePaths: !base.mergePaths }, true)).toBe('fit'))
   it('transparentBg change -> fit', () =>
     expect(firstDirtyStage(base, { ...base, transparentBg: !base.transparentBg }, true)).toBe('fit'))
+  it('optimize change -> fit', () =>
+    expect(firstDirtyStage(base, { ...base, optimize: !base.optimize }, true)).toBe('fit'))
 })
 
 describe('sameImageData', () => {

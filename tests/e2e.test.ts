@@ -58,4 +58,12 @@ describe('vectorize round-trip', () => {
     // ink = 1 region, outer edge + inner edge as a hole -> 2 loops. Total 3 + 2 = 5.
     expect(svg.match(/M/g)!.length).toBe(5)
   })
+
+  it('is byte-deterministic with all output options enabled', () => {
+    const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
+    const opts = { ...DEFAULT_OPTIONS, mergePaths: true, transparentBg: true, optimize: true }
+    const a = vectorize(img, opts)
+    const b = vectorize(img, opts)
+    expect(a.svg).toBe(b.svg)
+  })
 })
