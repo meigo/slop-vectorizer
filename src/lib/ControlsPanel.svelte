@@ -231,10 +231,23 @@
       ><input type="checkbox" bind:checked={options.optimize} {onchange} /> Optimize</label
     >
     <label class="check"
-      ><input type="checkbox" bind:checked={options.mergePaths} {onchange} /> Merge colors</label
+      ><input type="checkbox" bind:checked={options.stackedShapes} {onchange} /> Stacked shapes</label
     >
-    <label class="check"
-      ><input type="checkbox" bind:checked={options.transparentBg} {onchange} /> Transparent bg</label
+    <label class="check" class:disabled={options.stackedShapes}
+      ><input
+        type="checkbox"
+        bind:checked={options.mergePaths}
+        disabled={options.stackedShapes}
+        {onchange}
+      /> Merge colors</label
+    >
+    <label class="check" class:disabled={options.stackedShapes}
+      ><input
+        type="checkbox"
+        bind:checked={options.transparentBg}
+        disabled={options.stackedShapes}
+        {onchange}
+      /> Transparent bg</label
     >
   </section>
 
@@ -292,6 +305,9 @@
   section label.check {
     justify-content: flex-start;
     gap: 0.5rem;
+  }
+  .check.disabled {
+    opacity: 0.45;
   }
   .row {
     display: flex;
