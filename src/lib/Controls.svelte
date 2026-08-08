@@ -72,7 +72,7 @@
   </label>
   <label>Black point <input type="range" min="0" max="254" step="1" bind:value={options.blackPoint} oninput={onchange} /></label>
   <label>White point <input type="range" min="1" max="255" step="1" bind:value={options.whitePoint} oninput={onchange} /></label>
-  <label>Blur <input type="range" min="0" max="10" step="0.5" bind:value={options.blurRadius} oninput={onchange} /></label>
+  <label>Blur <input type="range" min="0" max="10" step="1" bind:value={options.blurRadius} oninput={onchange} /></label>
   <label>Saturation <input type="range" min="0" max="2" step="0.05" bind:value={options.saturation} oninput={onchange} /></label>
   <button onclick={() => { options.blackPoint = 0; options.whitePoint = 255; options.blurRadius = 0; options.saturation = 1; onchange() }}>Reset</button>
 </div>

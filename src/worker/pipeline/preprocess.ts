@@ -44,6 +44,10 @@ function boxBlurPass(src: Float32Array, w: number, h: number, r: number): Float3
   return out
 }
 
+/**
+ * Apply levels, blur, and saturation adjustments. Aggressive blackPoint/whitePoint levels clip anti-aliased
+ * edge gradients toward binary coverage, which degrades downstream sub-pixel boundary refinement toward pixel-grid accuracy.
+ */
 export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
   if (isIdentityPre(opts)) return image
   const { width: w, height: h } = image
