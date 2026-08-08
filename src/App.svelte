@@ -2,7 +2,7 @@
 <script lang="ts">
   import Dropzone from './lib/Dropzone.svelte'
   import CompareView from './lib/CompareView.svelte'
-  import Controls from './lib/Controls.svelte'
+  import ControlsPanel from './lib/ControlsPanel.svelte'
   import ImagePane from './lib/ImagePane.svelte'
   import { Viewport } from './lib/viewport.svelte'
   import { VectorizerClient } from './lib/workerClient'
@@ -117,15 +117,12 @@
     </div>
     <aside class="panel">
       {#if stage}<p>Vectorizing… ({stage})</p>{/if}
-      {#if notice}<p>{notice}</p>{/if}
-      <!-- TEMPORARY until Task 3: -->
-      <div class="view-controls">
-        <button onclick={() => (mode = 'side')} disabled={mode === 'side'}>Side by side</button>
-        <button onclick={() => (mode = 'split')} disabled={mode === 'split'}>Split</button>
-        <button onclick={fit}>Fit</button>
-      </div>
-      <Controls bind:options bind:upscale {stats} svg={result?.svg ?? null} onchange={rerun} onupscale={handleUpscale} />
-      <button onclick={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null }}>New image</button>
+      <ControlsPanel
+        bind:options bind:upscale bind:mode
+        {stats} svg={result?.svg ?? null} {notice}
+        onchange={rerun} onupscale={handleUpscale} onfit={fit}
+        onnew={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null }}
+      />
     </aside>
   </div>
   {#if error}
@@ -143,7 +140,6 @@
   .views.side { grid-template-columns: 1fr 1fr; gap: 2px; }
   .panel { overflow-y: auto; border-left: 1px solid #ddd; padding: 0.75rem; font-family: system-ui, sans-serif; }
   .empty { height: 100vh; display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; }
-  .view-controls { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
   .toast {
     position: fixed; bottom: 1rem; right: 1rem; background: #c0392b; color: white;
     padding: 0.75rem 1rem; border-radius: 6px; display: flex; gap: 1rem; align-items: center;
