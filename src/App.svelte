@@ -2,12 +2,18 @@
 <script lang="ts">
   import Dropzone from './lib/Dropzone.svelte'
   import CompareView from './lib/CompareView.svelte'
-  import Controls from './lib/Controls.svelte'
+  import ControlsPanel from './lib/ControlsPanel.svelte'
+  import ImagePane from './lib/ImagePane.svelte'
+  import { Viewport } from './lib/viewport.svelte'
   import { VectorizerClient } from './lib/workerClient'
   import { fileToRasterImage } from './lib/decode'
   import { DEFAULT_OPTIONS, type ClientResult, type RasterImage, type StageName } from './types'
 
   const client = new VectorizerClient()
+  const viewport = new Viewport()
+  let mode = $state<'side' | 'split'>('side')
+  let viewsW = $state(0), viewsH = $state(0)
+  let fittedW = 0, fittedH = 0
   let sourceFile = $state<Blob | null>(null)
   let upscale = $state<1 | 2 | 3>(1)
   let image = $state<RasterImage | null>(null)
@@ -31,6 +37,22 @@
   const sizedSvg = $derived(
     result && image ? result.svg.replace('<svg ', `<svg width="${image.width}" height="${image.height}" `) : ''
   )
+
+  // Two panes lay out side by side both in 'side' mode and when 'split' mode
+  // has no result yet (CompareView needs a single combined pane instead).
+  const twoColumn = $derived(mode === 'side' || !(result && displayImage))
+  function paneW(): number { return twoColumn ? (viewsW - 2) / 2 : viewsW }
+  function fit() {
+    const img = displayImage
+    if (img) viewport.fitTo(paneW(), viewsH, img.width, img.height)
+  }
+  $effect(() => { // fit on image-dimension change only, so pan/zoom survive slider drags
+    const img = displayImage
+    if (!img || viewsW === 0) return
+    if (img.width === fittedW && img.height === fittedH) return
+    fittedW = img.width; fittedH = img.height
+    fit()
+  })
 
   async function decodeAndRun(file: Blob) {
     error = null; notice = null; result = null; stage = null
@@ -81,31 +103,48 @@
   }
 </script>
 
-<main>
-  <h1>slop-vectorizer</h1>
-  {#if !image}
+{#if !image}
+  <main class="empty">
     <Dropzone onfile={handleFile} {error} />
-  {:else}
-    {#if stage}<p>Vectorizing… ({stage})</p>{/if}
-    {#if notice}<p>{notice}</p>{/if}
-    {#if error}
-      <div class="toast" role="alert">
-        {error}
-        <button onclick={() => (error = null)}>×</button>
-      </div>
-    {/if}
-    {#if result && displayImage}
-      <CompareView image={displayImage} svg={sizedSvg} />
-    {/if}
-    <Controls bind:options bind:upscale {stats} svg={result?.svg ?? null} onchange={rerun} onupscale={handleUpscale} />
-    <button onclick={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null }}>New image</button>
+  </main>
+{:else}
+  <div class="app-grid">
+    <div class="views" class:side={twoColumn}
+         bind:clientWidth={viewsW} bind:clientHeight={viewsH}>
+      {#if result && displayImage && mode === 'split'}
+        <CompareView image={displayImage} svg={sizedSvg} {viewport} />
+      {:else}
+        <ImagePane image={displayImage} label="Original" {viewport} />
+        <ImagePane svg={result ? sizedSvg : null} label="SVG" {viewport} />
+      {/if}
+    </div>
+    <aside class="panel">
+      {#if stage}<p>Vectorizing… ({stage})</p>{/if}
+      <ControlsPanel
+        bind:options bind:upscale bind:mode
+        {stats} svg={result?.svg ?? null} {notice}
+        onchange={rerun} onupscale={handleUpscale} onfit={fit}
+        onnew={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null; fittedW = 0; fittedH = 0 }}
+      />
+    </aside>
+  </div>
+  {#if error}
+    <div class="toast" role="alert">
+      {error}
+      <button onclick={() => (error = null)}>×</button>
+    </div>
   {/if}
-</main>
+{/if}
 
 <style>
-  main { max-width: 960px; margin: 0 auto; padding: 1rem; font-family: system-ui, sans-serif; }
+  :global(html), :global(body), :global(#app) { height: 100%; margin: 0; }
+  .app-grid { display: grid; grid-template-columns: 1fr 300px; grid-template-rows: minmax(0, 1fr); height: 100vh; }
+  .views { display: grid; min-width: 0; }
+  .views.side { grid-template-columns: 1fr 1fr; gap: 2px; }
+  .panel { overflow-y: auto; border-left: 1px solid #ddd; padding: 0.75rem; font-family: system-ui, sans-serif; }
+  .empty { height: 100vh; display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; }
   .toast {
-    position: fixed; bottom: 1rem; right: 1rem; background: #c0392b; color: white;
+    position: fixed; bottom: 1rem; right: 316px; background: #c0392b; color: white;
     padding: 0.75rem 1rem; border-radius: 6px; display: flex; gap: 1rem; align-items: center;
   }
   .toast button { background: none; border: none; color: white; cursor: pointer; font-size: 1rem; }
