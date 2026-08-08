@@ -65,6 +65,7 @@ function run(image: RasterImage, options: PipelineOptions, post: (m: WorkerRespo
     assembleSvg(paths, cache.palette!, image.width, image.height, {
       mergePaths: options.mergePaths,
       transparentBg: options.transparentBg,
+      optimize: options.optimize,
     }))
   const pathCount = (svg.match(/<path/g) ?? []).length
   cache.image = image

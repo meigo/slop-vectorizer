@@ -13,7 +13,8 @@ describe('svg assembly', () => {
   }
   const bg: RegionPath = { paletteIndex: 0, area: 400, loops: [[[0, 0, 20, 0, 20, 0, 20, 20]]] }
 
-  const V1 = { mergePaths: false, transparentBg: false }
+  const V1 = { mergePaths: false, transparentBg: false, optimize: false }
+  const OPT = { mergePaths: false, transparentBg: false, optimize: true }
 
   it('emits one path per region, larger areas first, correct fills', () => {
     const svg = assembleSvg([square, bg], palette, 20, 20, V1)
@@ -50,5 +51,41 @@ describe('svg assembly', () => {
     const svg = assembleSvg([bg], palette, 20, 20, { ...V1, transparentBg: true })
     expect(svg).not.toContain('<path')
     expect(svg).toContain('viewBox="0 0 20 20"')
+  })
+
+  /** Parse an optimized d back to absolute cubic endpoints/controls. */
+  function parseCompact(d: string): number[] {
+    const abs: number[] = []
+    for (const sub of d.split(/M/).filter(Boolean)) {
+      const [head, ...cs] = sub.replace(/z$/, '').split('c')
+      const nums = (s: string) => s.match(/-?(\d+\.?\d*|\.\d+)/g)!.map(Number)
+      let [cx, cy] = nums(head)
+      abs.push(cx, cy)
+      for (const c of cs) {
+        const n = nums(c)
+        abs.push(cx + n[0], cy + n[1], cx + n[2], cy + n[3], cx + n[4], cy + n[5])
+        cx += n[4]; cy += n[5]
+      }
+    }
+    return abs
+  }
+
+  it('optimize: round-trips to the same coordinates as absolute output', () => {
+    const absSvg = assembleSvg([square], palette, 20, 20, { ...OPT, optimize: false })
+    const optSvg = assembleSvg([square], palette, 20, 20, OPT)
+    const absD = absSvg.match(/d="([^"]*)"/)![1]
+    const optD = optSvg.match(/d="([^"]*)"/)![1]
+    const absNums = absD.match(/-?(\d+\.?\d*|\.\d+)/g)!.map(Number)
+    const optNums = parseCompact(optD)
+    expect(optNums.length).toBe(absNums.length)
+    optNums.forEach((v, i) => expect(v).toBeCloseTo(absNums[i], 6))
+  })
+
+  it('optimize: output is strictly smaller and has compact formatting', () => {
+    const absSvg = assembleSvg([square, bg], palette, 20, 20, { ...OPT, optimize: false })
+    const optSvg = assembleSvg([square, bg], palette, 20, 20, OPT)
+    expect(optSvg.length).toBeLessThan(absSvg.length)
+    expect(optSvg).not.toMatch(/ -/)   // no space before negatives
+    expect(optSvg).not.toMatch(/\d+\.\d*0[" cz]/) // no trailing zeros
   })
 })

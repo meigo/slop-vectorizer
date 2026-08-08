@@ -32,7 +32,40 @@ function loopToPath(loop: Cubic[]): string {
   return d + 'Z'
 }
 
-export interface SvgOptions { mergePaths: boolean; transparentBg: boolean }
+const centi = (v: number) => Math.round(v * 100)
+
+/** Format centi-units: 1234 -> "12.34", 50 -> ".5", -50 -> "-.5", 1200 -> "12", 0 -> "0". */
+const fmtCenti = (c: number): string => {
+  if (c === 0) return '0'
+  const neg = c < 0, a = Math.abs(c)
+  const int = Math.floor(a / 100), frac = a % 100
+  let s: string
+  if (frac === 0) s = String(int)
+  else {
+    let fs = String(frac).padStart(2, '0')
+    if (fs.endsWith('0')) fs = fs.slice(0, 1)
+    s = (int === 0 ? '' : String(int)) + '.' + fs
+  }
+  return (neg ? '-' : '') + s
+}
+
+/** Join with single spaces, omitting the space before a negative number. */
+const joinNums = (parts: string[]): string =>
+  parts.reduce((acc, p) => acc + (acc === '' || p.startsWith('-') ? '' : ' ') + p, '')
+
+function loopToPathCompact(loop: Cubic[]): string {
+  if (loop.length === 0) return ''
+  let cx = centi(loop[0][0]), cy = centi(loop[0][1])
+  let d = 'M' + joinNums([fmtCenti(cx), fmtCenti(cy)])
+  for (const c of loop) {
+    const n = [centi(c[2]) - cx, centi(c[3]) - cy, centi(c[4]) - cx, centi(c[5]) - cy, centi(c[6]) - cx, centi(c[7]) - cy]
+    d += 'c' + joinNums(n.map(fmtCenti))
+    cx = centi(c[6]); cy = centi(c[7])
+  }
+  return d + 'z'
+}
+
+export interface SvgOptions { mergePaths: boolean; transparentBg: boolean; optimize: boolean }
 
 export function assembleSvg(
   paths: RegionPath[], palette: Palette, width: number, height: number, opts: SvgOptions,
@@ -53,9 +86,10 @@ export function assembleSvg(
     const bg = paths.reduce((a, b) => (b.area > a.area ? b : a)).paletteIndex
     items = items.filter(i => i.paletteIndex !== bg)
   }
+  const toPath = opts.optimize ? loopToPathCompact : loopToPath
   const body = items
     .sort((a, b) => b.area - a.area)
-    .map(p => `<path fill="${hex(palette.colors, p.paletteIndex)}" fill-rule="evenodd" d="${p.loops.map(loopToPath).join('')}"/>`)
+    .map(p => `<path fill="${hex(palette.colors, p.paletteIndex)}" fill-rule="evenodd" d="${p.loops.map(toPath).join('')}"/>`)
     .join('\n  ')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">\n  ${body}\n</svg>\n`
 }

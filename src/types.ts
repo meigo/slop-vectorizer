@@ -10,6 +10,7 @@ export interface PipelineOptions {
   despeckleSize: number       // regions smaller than this (px) get merged
   mergePaths: boolean         // one <path> per palette color
   transparentBg: boolean      // skip background-colored regions
+  optimize: boolean           // compact path serialization
 }
 
 export const DEFAULT_OPTIONS: PipelineOptions = {
@@ -18,6 +19,7 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
   despeckleSize: 4,
   mergePaths: true,
   transparentBg: false,
+  optimize: true,
 }
 
 export interface Palette {
