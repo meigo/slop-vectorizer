@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { estimatePalette } from '../src/worker/pipeline/palette'
 import { segmentImage } from '../src/worker/pipeline/segment'
 import { extractBoundaries, loopPointsOf } from '../src/worker/pipeline/boundaries'
-import { findCorners } from '../src/worker/pipeline/corners'
+import { findCorners, findOpenCorners } from '../src/worker/pipeline/corners'
 import { renderShape, insideCircle, insideRotSquare } from './helpers/render'
 
 function shapeLoop(inside: (x: number, y: number) => boolean): Float64Array {
@@ -21,5 +21,24 @@ describe('findCorners', () => {
   it('finds exactly 4 corners on a rotated square', () => {
     const corners = findCorners(shapeLoop(insideRotSquare(48, 48, 26, 0.3)))
     expect(corners.length).toBe(4)
+  })
+})
+
+describe('findOpenCorners', () => {
+  it('right angle mid-polyline is found, endpoints are not corners', () => {
+    const pts: number[] = []
+    for (let i = 0; i <= 20; i++) pts.push(i, 0) // along x
+    for (let i = 1; i <= 20; i++) pts.push(20, i) // turn 90° at index 20
+    const corners = findOpenCorners(new Float64Array(pts))
+    expect(corners).toEqual([20])
+  })
+
+  it('straight and gently-curved open lines have none', () => {
+    const straight: number[] = []
+    for (let i = 0; i <= 30; i++) straight.push(i, 0.05 * i)
+    expect(findOpenCorners(new Float64Array(straight))).toEqual([])
+    const gentle: number[] = []
+    for (let i = 0; i <= 40; i++) gentle.push(i, 10 * Math.sin(i / 15))
+    expect(findOpenCorners(new Float64Array(gentle))).toEqual([])
   })
 })

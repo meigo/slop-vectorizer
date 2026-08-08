@@ -46,3 +46,43 @@ export function findCorners(loop: Float64Array): number[] {
   }
   return corners
 }
+
+export function findOpenCorners(loop: Float64Array): number[] {
+  const n = loop.length / 2
+  if (n < 5) return []
+  const px = (i: number) => loop[2 * i]
+  const py = (i: number) => loop[2 * i + 1]
+  const deviation = new Float64Array(n)
+  for (let i = 1; i < n - 1; i++) {
+    let minDev = Infinity
+    for (const s of SCALES) {
+      const step = Math.min(s, i, n - 1 - i)
+      if (step < 1) continue
+      const ax = px(i) - px(i - step),
+        ay = py(i) - py(i - step)
+      const bx = px(i + step) - px(i),
+        by = py(i + step) - py(i)
+      const dot = ax * bx + ay * by,
+        cross = ax * by - ay * bx
+      minDev = Math.min(minDev, Math.abs(Math.atan2(cross, dot)))
+    }
+    deviation[i] = minDev === Infinity ? 0 : minDev
+  }
+  const win = SCALES[SCALES.length - 1]
+  const corners: number[] = []
+  for (let i = 1; i < n - 1; i++) {
+    if (deviation[i] < ANGLE_THRESHOLD) continue
+    let isMax = true
+    for (let d = -win; d <= win; d++) {
+      if (d === 0) continue
+      const j = i + d
+      if (j < 1 || j > n - 2) continue
+      if (deviation[j] > deviation[i] || (deviation[j] === deviation[i] && j < i)) {
+        isMax = false
+        break
+      }
+    }
+    if (isMax) corners.push(i)
+  }
+  return corners
+}
