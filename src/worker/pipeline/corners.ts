@@ -57,7 +57,7 @@ export function findOpenCorners(loop: Float64Array): number[] {
     let minDev = Infinity
     for (const s of SCALES) {
       const step = Math.min(s, i, n - 1 - i)
-      if (step < 1) continue
+      if (step < 2) continue
       const ax = px(i) - px(i - step),
         ay = py(i) - py(i - step)
       const bx = px(i + step) - px(i),

@@ -41,4 +41,23 @@ describe('findOpenCorners', () => {
     for (let i = 0; i <= 40; i++) gentle.push(i, 10 * Math.sin(i / 15))
     expect(findOpenCorners(new Float64Array(gentle))).toEqual([])
   })
+
+  it('a junction-vertex offset near an arc endpoint is not read as a corner', () => {
+    // Quarter-circle arc, radius 30, ~60 points. Point 0 stands in for the
+    // integer junction vertex, snapped to the nearest lattice point — up to
+    // ~0.5px off the smooth refined chain the rest of the arc follows.
+    const r = 30
+    const count = 60
+    const cx = 40.5
+    const cy = 40.5
+    const pts: number[] = []
+    for (let i = 0; i <= count; i++) {
+      const theta = (Math.PI / 2) * (i / count)
+      pts.push(cx + r * Math.cos(theta), cy + r * Math.sin(theta))
+    }
+    pts[0] = Math.round(pts[0])
+    pts[1] = Math.round(pts[1])
+    const corners = findOpenCorners(new Float64Array(pts))
+    expect(corners.some((c) => c < 3)).toBe(false)
+  })
 })
