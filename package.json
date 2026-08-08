@@ -28,5 +28,12 @@
     "typescript-eslint": "^8.66.0",
     "vite": "^8.2.0",
     "vitest": "^4.1.10"
-  }
+  },
+  "description": "Client-side image vectorizer with sub-pixel edge recovery",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/meigo/slop-vectorizer.git"
+  },
+  "homepage": "https://meigo.github.io/slop-vectorizer/"
 }
