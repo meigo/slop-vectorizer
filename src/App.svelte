@@ -38,7 +38,10 @@
     result && image ? result.svg.replace('<svg ', `<svg width="${image.width}" height="${image.height}" `) : ''
   )
 
-  function paneW(): number { return mode === 'side' ? (viewsW - 2) / 2 : viewsW }
+  // Two panes lay out side by side both in 'side' mode and when 'split' mode
+  // has no result yet (CompareView needs a single combined pane instead).
+  const twoColumn = $derived(mode === 'side' || !(result && displayImage))
+  function paneW(): number { return twoColumn ? (viewsW - 2) / 2 : viewsW }
   function fit() {
     const img = displayImage
     if (img) viewport.fitTo(paneW(), viewsH, img.width, img.height)
@@ -106,13 +109,13 @@
   </main>
 {:else}
   <div class="app-grid">
-    <div class="views" class:side={mode === 'side'}
+    <div class="views" class:side={twoColumn}
          bind:clientWidth={viewsW} bind:clientHeight={viewsH}>
-      {#if mode === 'side'}
+      {#if result && displayImage && mode === 'split'}
+        <CompareView image={displayImage} svg={sizedSvg} {viewport} />
+      {:else}
         <ImagePane image={displayImage} label="Original" {viewport} />
         <ImagePane svg={result ? sizedSvg : null} label="SVG" {viewport} />
-      {:else if result && displayImage}
-        <CompareView image={displayImage} svg={sizedSvg} {viewport} />
       {/if}
     </div>
     <aside class="panel">
@@ -121,7 +124,7 @@
         bind:options bind:upscale bind:mode
         {stats} svg={result?.svg ?? null} {notice}
         onchange={rerun} onupscale={handleUpscale} onfit={fit}
-        onnew={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null }}
+        onnew={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null; fittedW = 0; fittedH = 0 }}
       />
     </aside>
   </div>
@@ -135,13 +138,13 @@
 
 <style>
   :global(html), :global(body), :global(#app) { height: 100%; margin: 0; }
-  .app-grid { display: grid; grid-template-columns: 1fr 300px; height: 100vh; }
+  .app-grid { display: grid; grid-template-columns: 1fr 300px; grid-template-rows: minmax(0, 1fr); height: 100vh; }
   .views { display: grid; min-width: 0; }
   .views.side { grid-template-columns: 1fr 1fr; gap: 2px; }
   .panel { overflow-y: auto; border-left: 1px solid #ddd; padding: 0.75rem; font-family: system-ui, sans-serif; }
   .empty { height: 100vh; display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; }
   .toast {
-    position: fixed; bottom: 1rem; right: 1rem; background: #c0392b; color: white;
+    position: fixed; bottom: 1rem; right: 316px; background: #c0392b; color: white;
     padding: 0.75rem 1rem; border-radius: 6px; display: flex; gap: 1rem; align-items: center;
   }
   .toast button { background: none; border: none; color: white; cursor: pointer; font-size: 1rem; }

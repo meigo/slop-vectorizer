@@ -101,9 +101,9 @@
 
   <section>
     <div class="label">Output</div>
-    <label><input type="checkbox" bind:checked={options.optimize} onchange={onchange} /> Optimize</label>
-    <label><input type="checkbox" bind:checked={options.mergePaths} onchange={onchange} /> Merge colors</label>
-    <label><input type="checkbox" bind:checked={options.transparentBg} onchange={onchange} /> Transparent bg</label>
+    <label class="check"><input type="checkbox" bind:checked={options.optimize} onchange={onchange} /> Optimize</label>
+    <label class="check"><input type="checkbox" bind:checked={options.mergePaths} onchange={onchange} /> Merge colors</label>
+    <label class="check"><input type="checkbox" bind:checked={options.transparentBg} onchange={onchange} /> Transparent bg</label>
   </section>
 
   <button class="download" onclick={download} disabled={!svg}>Download SVG</button>
@@ -120,10 +120,11 @@
 </div>
 
 <style>
-  .cp { display: flex; flex-direction: column; gap: 1rem; font-size: 0.9rem; color: #444; }
+  .cp { display: flex; flex-direction: column; gap: 1rem; font-size: 0.9rem; color: #444; min-height: 100%; }
   header { display: flex; justify-content: space-between; align-items: center; }
   .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: #999; margin-bottom: 0.4rem; }
   section label { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin: 0.3rem 0; }
+  section label.check { justify-content: flex-start; gap: 0.5rem; }
   .row { display: flex; gap: 0.4rem; }
   .row button.active { background: #4a90d9; color: white; }
   .download { padding: 0.5rem; }
