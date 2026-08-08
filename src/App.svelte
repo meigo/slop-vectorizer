@@ -99,20 +99,14 @@
   $effect(() => {
     const pal = result?.palette
     if (!pal) return
-    const exactSame =
-      lastPalette !== null &&
-      lastPalette.length === pal.length &&
-      lastPalette.every((v, i) => v === pal[i])
-    if (lastPalette && !exactSame && options.colorOverrides) {
-      const remapped = remapOverrides(lastPalette, pal, options.colorOverrides)
-      const unchanged =
-        remapped !== null &&
-        remapped.length === options.colorOverrides.length &&
-        remapped.every((v, i) => v === options.colorOverrides![i])
-      if (!unchanged) {
-        options.colorOverrides = remapped
-        rerun()
-      }
+    // Same k ⇒ keep overrides at their index: the palette is re-estimated from the
+    // same source, and pre-effects (levels/blur/saturation) are monotonic — they
+    // move colors, sometimes far, but never reorder the luminance-sorted palette.
+    // "Override the darkest color" stays meaningful at any levels setting. Only a
+    // k change (color-count switch, auto-k flip) needs nearest-color remapping.
+    if (lastPalette && lastPalette.length !== pal.length && options.colorOverrides) {
+      options.colorOverrides = remapOverrides(lastPalette, pal, options.colorOverrides)
+      rerun()
     }
     lastPalette = pal
   })
