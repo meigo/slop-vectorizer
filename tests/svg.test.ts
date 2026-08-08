@@ -18,8 +18,8 @@ describe('svg assembly', () => {
   }
   const bg: RegionPath = { paletteIndex: 0, area: 400, loops: [[[0, 0, 20, 0, 20, 0, 20, 20]]] }
 
-  const V1 = { mergePaths: false, transparentBg: false, optimize: false }
-  const OPT = { mergePaths: false, transparentBg: false, optimize: true }
+  const V1 = { mergePaths: false, transparentBg: false, optimize: false, colorOverrides: null }
+  const OPT = { mergePaths: false, transparentBg: false, optimize: true, colorOverrides: null }
 
   it('emits one path per region, larger areas first, correct fills', () => {
     const svg = assembleSvg([square, bg], palette, 20, 20, V1)
@@ -93,5 +93,36 @@ describe('svg assembly', () => {
     expect(optSvg.length).toBeLessThan(absSvg.length)
     expect(optSvg).not.toMatch(/ -/) // no space before negatives
     expect(optSvg).not.toMatch(/\d+\.\d*0[" cz]/) // no trailing zeros
+  })
+
+  it('colorOverrides replaces exactly the overridden fill', () => {
+    const opts = {
+      mergePaths: false,
+      transparentBg: false,
+      optimize: false,
+      colorOverrides: [null, '#123456'],
+    }
+    const svg = assembleSvg([square, bg], palette, 20, 20, opts)
+    expect(svg).toContain('fill="#123456"') // square (index 1) recolored
+    expect(svg).toContain('fill="#f5f5f5"') // bg (index 0) untouched
+    expect(svg).not.toContain('#c81e1e')
+  })
+
+  it('colorOverrides changes only fills, never geometry', () => {
+    const base = { mergePaths: true, transparentBg: false, optimize: true, colorOverrides: null }
+    const a = assembleSvg([square, bg], palette, 20, 20, base)
+    const b = assembleSvg([square, bg], palette, 20, 20, {
+      ...base,
+      colorOverrides: ['#000000', '#ffffff'],
+    })
+    const paths = (s: string) => [...s.matchAll(/d="([^"]*)"/g)].map((m) => m[1])
+    expect(paths(b)).toEqual(paths(a))
+  })
+
+  it('short or absent override arrays are no-ops', () => {
+    const base = { mergePaths: false, transparentBg: false, optimize: false, colorOverrides: null }
+    const a = assembleSvg([square, bg], palette, 20, 20, base)
+    const b = assembleSvg([square, bg], palette, 20, 20, { ...base, colorOverrides: [] })
+    expect(b).toBe(a)
   })
 })

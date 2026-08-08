@@ -99,4 +99,16 @@ describe('vectorize round-trip', () => {
     expect(stages).not.toContain('pre')
     expect(stats.timings.pre).toBeUndefined()
   })
+
+  it('colorOverrides recolors output and stays byte-deterministic', () => {
+    const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
+    const opts = { ...DEFAULT_OPTIONS, colorOverrides: ['#112233', '#445566'] }
+    const a = vectorize(img, opts)
+    const b = vectorize(img, opts)
+    expect(a.svg).toBe(b.svg)
+    expect(a.svg).toMatch(/fill="#(112233|445566)"/)
+    const plain = vectorize(img, DEFAULT_OPTIONS)
+    const paths = (s: string) => [...s.matchAll(/d="([^"]*)"/g)].map((m) => m[1])
+    expect(paths(a.svg)).toEqual(paths(plain.svg))
+  })
 })

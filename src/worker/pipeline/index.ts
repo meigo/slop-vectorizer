@@ -59,6 +59,7 @@ export function vectorize(
       mergePaths: options.mergePaths,
       transparentBg: options.transparentBg,
       optimize: options.optimize,
+      colorOverrides: options.colorOverrides,
     }),
   )
   const pathCount = (svg.match(/<path/g) ?? []).length

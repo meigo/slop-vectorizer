@@ -80,6 +80,7 @@ export interface SvgOptions {
   mergePaths: boolean
   transparentBg: boolean
   optimize: boolean
+  colorOverrides: (string | null)[] | null
 }
 
 export function assembleSvg(
@@ -115,10 +116,10 @@ export function assembleSvg(
   const toPath = opts.optimize ? loopToPathCompact : loopToPath
   const body = items
     .sort((a, b) => b.area - a.area)
-    .map(
-      (p) =>
-        `<path fill="${hex(palette.colors, p.paletteIndex)}" fill-rule="evenodd" d="${p.loops.map(toPath).join('')}"/>`,
-    )
+    .map((p) => {
+      const fill = opts.colorOverrides?.[p.paletteIndex] ?? hex(palette.colors, p.paletteIndex)
+      return `<path fill="${fill}" fill-rule="evenodd" d="${p.loops.map(toPath).join('')}"/>`
+    })
     .join('\n  ')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">\n  ${body}\n</svg>\n`
 }

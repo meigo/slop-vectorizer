@@ -27,6 +27,8 @@ describe('firstDirtyStage', () => {
     expect(firstDirtyStage(base, { ...base, blurRadius: 2 }, true)).toBe('pre'))
   it('gapClosing change -> segment', () =>
     expect(firstDirtyStage(base, { ...base, gapClosing: 2 }, true)).toBe('segment'))
+  it('colorOverrides change -> fit', () =>
+    expect(firstDirtyStage(base, { ...base, colorOverrides: ['#ff0000'] }, true)).toBe('fit'))
 })
 
 describe('sameImageData', () => {
