@@ -61,9 +61,26 @@ describe('vectorize round-trip', () => {
 
   it('is byte-deterministic with all output options enabled', () => {
     const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
-    const opts = { ...DEFAULT_OPTIONS, mergePaths: true, transparentBg: true, optimize: true }
+    const opts = { ...DEFAULT_OPTIONS, mergePaths: true, transparentBg: true, optimize: true, gapClosing: 2, blackPoint: 15 }
     const a = vectorize(img, opts)
     const b = vectorize(img, opts)
     expect(a.svg).toBe(b.svg)
+  })
+
+  it('non-identity pre runs first and appears in timings', () => {
+    const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
+    const stages: string[] = []
+    const { stats } = vectorize(img, { ...DEFAULT_OPTIONS, blackPoint: 20 }, s => stages.push(s))
+    expect(stages[0]).toBe('pre')
+    expect(stats.timings.pre).toBeGreaterThanOrEqual(0)
+    expect(stats.pathCount).toBe(2) // mild levels don't change the circle result
+  })
+
+  it('identity pre is skipped entirely', () => {
+    const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
+    const stages: string[] = []
+    const { stats } = vectorize(img, DEFAULT_OPTIONS, s => stages.push(s))
+    expect(stages).not.toContain('pre')
+    expect(stats.timings.pre).toBeUndefined()
   })
 })

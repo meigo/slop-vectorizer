@@ -2,6 +2,7 @@ import type {
   RasterImage, PipelineOptions, StageName, WorkerRequest, WorkerResponse,
   Palette, Segmentation, RegionLoops, PipelineStats,
 } from '../types'
+import { preprocess, isIdentityPre, type PreOptions } from './pipeline/preprocess'
 import { estimatePalette } from './pipeline/palette'
 import { segmentImage } from './pipeline/segment'
 import { extractBoundaries } from './pipeline/boundaries'
@@ -9,20 +10,23 @@ import { findCorners } from './pipeline/corners'
 import { fitLoop, type Cubic } from './pipeline/fitcurves'
 import { assembleSvg, polygonArea, type RegionPath } from './pipeline/svg'
 
-const ORDER: StageName[] = ['palette', 'segment', 'boundaries', 'corners', 'fit', 'svg']
+const ORDER: StageName[] = ['pre', 'palette', 'segment', 'boundaries', 'corners', 'fit', 'svg']
 
 export function firstDirtyStage(
   prev: PipelineOptions | null, next: PipelineOptions, sameImage: boolean,
 ): StageName {
-  if (!prev || !sameImage) return 'palette'
+  if (!prev || !sameImage) return 'pre'
+  if (prev.blackPoint !== next.blackPoint || prev.whitePoint !== next.whitePoint ||
+      prev.blurRadius !== next.blurRadius || prev.saturation !== next.saturation) return 'pre'
   if (prev.colorCount !== next.colorCount) return 'palette'
-  if (prev.despeckleSize !== next.despeckleSize) return 'segment'
+  if (prev.despeckleSize !== next.despeckleSize || prev.gapClosing !== next.gapClosing) return 'segment'
   return 'fit' // smoothness (or nothing) changed; fit+svg are cheap
 }
 
 interface Cache {
   image: RasterImage | null
   options: PipelineOptions | null
+  pre?: RasterImage
   palette?: Palette
   seg?: Segmentation
   bounds?: RegionLoops[]
@@ -41,12 +45,17 @@ function run(image: RasterImage, options: PipelineOptions, post: (m: WorkerRespo
     timings[name] = performance.now() - t0
     return r
   }
+  const preOpts: PreOptions = { blackPoint: options.blackPoint, whitePoint: options.whitePoint, blurRadius: options.blurRadius, saturation: options.saturation }
+  const identity = isIdentityPre(preOpts)
+  if (fromIdx <= ORDER.indexOf('pre') || !cache.pre)
+    cache.pre = identity ? image : stage('pre', () => preprocess(image, preOpts))
+  const src = cache.pre
   if (fromIdx <= ORDER.indexOf('palette') || !cache.palette)
-    cache.palette = stage('palette', () => estimatePalette(image, options.colorCount))
+    cache.palette = stage('palette', () => estimatePalette(src, options.colorCount))
   if (fromIdx <= ORDER.indexOf('segment') || !cache.seg)
-    cache.seg = stage('segment', () => segmentImage(image, cache.palette!, options.despeckleSize))
+    cache.seg = stage('segment', () => segmentImage(src, cache.palette!, options.despeckleSize, options.gapClosing))
   if (fromIdx <= ORDER.indexOf('boundaries') || !cache.bounds) {
-    cache.bounds = stage('boundaries', () => extractBoundaries(image, cache.seg!, cache.palette!))
+    cache.bounds = stage('boundaries', () => extractBoundaries(src, cache.seg!, cache.palette!))
     cache.corners = stage('corners', () => cache.bounds!.map(r => r.loops.map(l => findCorners(l))))
   }
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
@@ -70,7 +79,7 @@ function run(image: RasterImage, options: PipelineOptions, post: (m: WorkerRespo
   const pathCount = (svg.match(/<path/g) ?? []).length
   cache.image = image
   cache.options = options
-  post({ type: 'result', jobId, result: { svg, stats: { pathCount, pointCount, timings } } })
+  post({ type: 'result', jobId, result: { svg, stats: { pathCount, pointCount, timings } }, ...(identity ? {} : { preImage: src }) })
 }
 
 export function sameImageData(a: RasterImage | null, b: RasterImage): boolean {

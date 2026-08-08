@@ -2,11 +2,13 @@
 <script lang="ts">
   import type { PipelineOptions, PipelineStats } from '../types'
 
-  let { options = $bindable(), stats, svg, onchange }: {
+  let { options = $bindable(), upscale = $bindable(), stats, svg, onchange, onupscale }: {
     options: PipelineOptions
+    upscale: 1 | 2 | 3
     stats: PipelineStats | null
     svg: string | null
     onchange: () => void
+    onupscale: () => void
   } = $props()
 
   function download() {
@@ -48,6 +50,7 @@
     Despeckle
     <input type="range" min="1" max="64" step="1" bind:value={options.despeckleSize} oninput={onchange} />
   </label>
+  <label>Gap closing <input type="range" min="0" max="3" step="1" bind:value={options.gapClosing} oninput={onchange} /></label>
   <label><input type="checkbox" bind:checked={options.optimize} onchange={onchange} /> Optimize</label>
   <label><input type="checkbox" bind:checked={options.mergePaths} onchange={onchange} /> Merge colors</label>
   <label><input type="checkbox" bind:checked={options.transparentBg} onchange={onchange} /> Transparent bg</label>
@@ -58,6 +61,20 @@
       {#if stageMs(stats)}<span class="stages">{stageMs(stats)}</span>{/if}
     </span>
   {/if}
+</div>
+
+<div class="controls input-row">
+  <label>
+    Upscale
+    <select bind:value={upscale} onchange={onupscale}>
+      <option value={1}>×1</option><option value={2}>×2</option><option value={3}>×3</option>
+    </select>
+  </label>
+  <label>Black point <input type="range" min="0" max="254" step="1" bind:value={options.blackPoint} oninput={onchange} /></label>
+  <label>White point <input type="range" min="1" max="255" step="1" bind:value={options.whitePoint} oninput={onchange} /></label>
+  <label>Blur <input type="range" min="0" max="10" step="1" bind:value={options.blurRadius} oninput={onchange} /></label>
+  <label>Saturation <input type="range" min="0" max="2" step="0.05" bind:value={options.saturation} oninput={onchange} /></label>
+  <button onclick={() => { options.blackPoint = 0; options.whitePoint = 255; options.blurRadius = 0; options.saturation = 1; onchange() }}>Reset</button>
 </div>
 
 <style>

@@ -5,22 +5,28 @@ import type { RasterImage } from '../src/types'
 
 describe('firstDirtyStage', () => {
   const base = DEFAULT_OPTIONS
-  it('new image -> palette', () =>
-    expect(firstDirtyStage(base, base, false)).toBe('palette'))
+  it('new image -> pre', () =>
+    expect(firstDirtyStage(base, base, false)).toBe('pre'))
   it('colorCount change -> palette', () =>
     expect(firstDirtyStage(base, { ...base, colorCount: 4 }, true)).toBe('palette'))
   it('despeckle change -> segment', () =>
     expect(firstDirtyStage(base, { ...base, despeckleSize: 9 }, true)).toBe('segment'))
   it('smoothness change -> fit', () =>
     expect(firstDirtyStage(base, { ...base, smoothness: 0.9 }, true)).toBe('fit'))
-  it('no prev -> palette', () =>
-    expect(firstDirtyStage(null, base, true)).toBe('palette'))
+  it('no prev -> pre', () =>
+    expect(firstDirtyStage(null, base, true)).toBe('pre'))
   it('mergePaths change -> fit', () =>
     expect(firstDirtyStage(base, { ...base, mergePaths: !base.mergePaths }, true)).toBe('fit'))
   it('transparentBg change -> fit', () =>
     expect(firstDirtyStage(base, { ...base, transparentBg: !base.transparentBg }, true)).toBe('fit'))
   it('optimize change -> fit', () =>
     expect(firstDirtyStage(base, { ...base, optimize: !base.optimize }, true)).toBe('fit'))
+  it('blackPoint change -> pre', () =>
+    expect(firstDirtyStage(base, { ...base, blackPoint: 40 }, true)).toBe('pre'))
+  it('blurRadius change -> pre', () =>
+    expect(firstDirtyStage(base, { ...base, blurRadius: 2 }, true)).toBe('pre'))
+  it('gapClosing change -> segment', () =>
+    expect(firstDirtyStage(base, { ...base, gapClosing: 2 }, true)).toBe('segment'))
 })
 
 describe('sameImageData', () => {

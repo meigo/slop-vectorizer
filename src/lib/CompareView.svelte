@@ -13,6 +13,7 @@
   let panning = false
   let draggingDivider = false
   let lastX = 0, lastY = 0
+  let fittedW = 0, fittedH = 0
 
   $effect(() => {
     if (!canvas) return
@@ -22,10 +23,13 @@
     ctx.putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
   })
 
-  // Fit and center whenever a new image arrives (same image + new options keeps the view).
+  // Fit and center whenever the image dimensions change (same dims, e.g. a pre-effect
+  // slider drag or upscale re-decode at the same size, keeps the current view).
   $effect(() => {
     const { width, height } = image
     if (!container) return
+    if (width === fittedW && height === fittedH) return
+    fittedW = width; fittedH = height
     const cw = container.clientWidth, ch = container.clientHeight
     const z = Math.min(1, cw / width, ch / height)
     zoom = z
