@@ -5,11 +5,13 @@
   import Controls from './lib/Controls.svelte'
   import { VectorizerClient } from './lib/workerClient'
   import { fileToRasterImage } from './lib/decode'
-  import { DEFAULT_OPTIONS, type VectorResult, type RasterImage, type StageName } from './types'
+  import { DEFAULT_OPTIONS, type ClientResult, type RasterImage, type StageName } from './types'
 
   const client = new VectorizerClient()
+  let sourceFile = $state<Blob | null>(null)
+  let upscale = $state<1 | 2 | 3>(1)
   let image = $state<RasterImage | null>(null)
-  let result = $state<VectorResult | null>(null)
+  let result = $state<ClientResult | null>(null)
   let stage = $state<StageName | null>(null)
   let error = $state<string | null>(null)
   let notice = $state<string | null>(null)
@@ -17,6 +19,9 @@
   let debounce: ReturnType<typeof setTimeout> | undefined
 
   const stats = $derived(result?.stats ?? null)
+  // Compare view shows the preprocessed bitmap (levels/blur/saturation applied) when
+  // the pipeline produced one, so pre-effect sliders are visible on the LEFT side.
+  const displayImage = $derived(result?.preImage ?? image)
 
   // The pipeline emits an SVG with only a viewBox (no width/height), so a bare
   // {@html} render would size it via CSS (100%/auto) instead of viewBox scale.
@@ -27,10 +32,10 @@
     result && image ? result.svg.replace('<svg ', `<svg width="${image.width}" height="${image.height}" `) : ''
   )
 
-  async function handleFile(file: File) {
+  async function decodeAndRun(file: Blob) {
     error = null; notice = null; result = null; stage = null
     try {
-      const { image: img, downscaled } = await fileToRasterImage(file)
+      const { image: img, downscaled } = await fileToRasterImage(file, upscale)
       if (downscaled) notice = 'Large image was downscaled to 4096px'
       image = img
       result = await client.vectorize(img, $state.snapshot(options), s => (stage = s))
@@ -41,6 +46,15 @@
       error = msg === 'undecodable' ? 'Could not decode that file — try a PNG, JPEG, GIF, or WebP.' : msg
       stage = null
     }
+  }
+
+  function handleFile(file: File) {
+    sourceFile = file
+    void decodeAndRun(file)
+  }
+
+  function handleUpscale() {
+    if (sourceFile) void decodeAndRun(sourceFile)
   }
 
   // Debounced staged re-run triggered by Controls on any option change. Does NOT
@@ -80,11 +94,11 @@
         <button onclick={() => (error = null)}>×</button>
       </div>
     {/if}
-    {#if result && image}
-      <CompareView {image} svg={sizedSvg} />
+    {#if result && displayImage}
+      <CompareView image={displayImage} svg={sizedSvg} />
     {/if}
-    <Controls bind:options {stats} svg={result?.svg ?? null} onchange={rerun} />
-    <button onclick={() => { client.cancel(); image = null; result = null; error = null; stage = null }}>New image</button>
+    <Controls bind:options bind:upscale {stats} svg={result?.svg ?? null} onchange={rerun} onupscale={handleUpscale} />
+    <button onclick={() => { client.cancel(); sourceFile = null; upscale = 1; image = null; result = null; error = null; stage = null }}>New image</button>
   {/if}
 </main>
 
