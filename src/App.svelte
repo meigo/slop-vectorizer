@@ -28,7 +28,7 @@
   let debounce: ReturnType<typeof setTimeout> | undefined
   let lastPalette: number[] | null = null
   let lastUpscale = 1
-  let pendingFramingScale: number | null = null
+  let preserveNextFraming = false
 
   const stats = $derived(result?.stats ?? null)
   // Compare view shows the preprocessed bitmap (levels/blur/saturation applied) when
@@ -63,12 +63,16 @@
     const img = displayImage
     if (!img || viewsW === 0) return
     if (img.width === fittedW && img.height === fittedH) return
+    const prevW = fittedW
     fittedW = img.width
     fittedH = img.height
-    if (pendingFramingScale !== null) {
-      viewport.zoom = viewport.zoom / pendingFramingScale
-      pendingFramingScale = null
+    if (preserveNextFraming && prevW > 0) {
+      // Exact by construction: the ratio comes from the ACTUAL dimensions (the
+      // nominal upscale factor lies when the 4096px clamp or rounding kicks in).
+      viewport.zoom = viewport.zoom * (prevW / img.width)
+      preserveNextFraming = false
     } else {
+      preserveNextFraming = false
       fit()
     }
   })
@@ -140,9 +144,9 @@
     // PHYSICAL bridge width is preserved (and round-trips: ×1 g=2 → ×2 g=4 → ×1
     // g=2). A rescaled in-range value always stays within the new 3×upscale max.
     options.gapClosing = Math.min(3 * upscale, Math.round(options.gapClosing * factor))
-    // Preserve the user's deliberate framing across the re-decode: dims scale by
-    // `factor`, so zoom/factor with unchanged pan reproduces the exact same view.
-    if (viewport.touched && image) pendingFramingScale = factor
+    // Preserve the user's deliberate framing across the re-decode; the fit effect
+    // computes the exact zoom ratio from the actual before/after dimensions.
+    if (viewport.touched && image) preserveNextFraming = true
     if (sourceFile) void decodeAndRun(sourceFile)
   }
 
@@ -206,7 +210,7 @@
           sourceFile = null
           upscale = 1
           lastUpscale = 1
-          pendingFramingScale = null
+          preserveNextFraming = false
           image = null
           result = null
           error = null
