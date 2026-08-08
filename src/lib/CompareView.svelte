@@ -111,7 +111,6 @@
     position: relative;
     overflow: hidden;
     height: 100%;
-    border: 1px solid var(--color-border);
     background: repeating-conic-gradient(
         var(--color-border-light) 0% 25%,
         var(--color-surface) 0% 50%

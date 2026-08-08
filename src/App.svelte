@@ -260,7 +260,6 @@
     background: var(--color-accent);
     color: var(--color-accent-text);
     opacity: 0.85;
-    font-family: system-ui, sans-serif;
     font-size: 0.85rem;
     padding: 0.35rem 0.9rem;
     border-radius: 999px;

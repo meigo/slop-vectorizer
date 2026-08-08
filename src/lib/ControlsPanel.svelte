@@ -259,7 +259,7 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    font-size: 0.9rem;
+    font-size: 11px;
     color: var(--color-text-secondary);
     min-height: 100%;
   }
@@ -356,7 +356,7 @@
     border: none;
     color: var(--color-selection);
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 10px;
     padding: 0;
   }
   .download {
@@ -365,8 +365,12 @@
     color: var(--color-accent-text);
     border-color: var(--color-accent);
   }
-  .download:hover {
+  .download:hover:not(:disabled) {
     opacity: 0.85;
+  }
+  .download:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .notice {
     color: #b8860b;
@@ -374,7 +378,7 @@
   footer {
     margin-top: auto;
     color: var(--color-text-muted);
-    font-size: 0.8rem;
+    font-size: 10px;
   }
   footer .stats {
     display: flex;
@@ -383,6 +387,6 @@
   }
   footer .stages {
     color: var(--color-text-muted);
-    font-size: 0.75rem;
+    font-size: 10px;
   }
 </style>
