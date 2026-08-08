@@ -6,6 +6,8 @@ Client-side image vectorizer with sub-pixel edge recovery, inspired by [Vector M
 
 Everything runs in your browser. Images are never uploaded anywhere — the whole pipeline executes locally in a Web Worker.
 
+![slop-vectorizer UI: an ink sketch on the left, its vectorized SVG with transparent background on the right, controls panel with palette swatches, pre-effects and output options](public/ui-screenshot.png)
+
 ## How it works
 
 Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 30% blended between two region colors tells you where the true edge crosses it. The pipeline exploits this:
