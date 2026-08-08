@@ -61,6 +61,41 @@ describe('preprocess', () => {
     expect(after.variance).toBeLessThan(before.variance * 0.3)
   })
 
+  it('fractional blur values produce intermediate strength', () => {
+    const w = 64,
+      h = 64
+    const noise = (): RasterImage => {
+      const img = flat(w, h, [128, 128, 128])
+      const rand = mulberry32(42)
+      for (let p = 0; p < img.data.length; p += 4) {
+        const v = 128 + (rand() - 0.5) * 100
+        img.data[p] = v
+        img.data[p + 1] = v
+        img.data[p + 2] = v
+      }
+      return img
+    }
+    const variance = (blurRadius: number): number => {
+      const d = preprocess(noise(), { ...IDENTITY_PRE, blurRadius }).data
+      let sum = 0,
+        sq = 0,
+        n = 0
+      for (let p = 0; p < d.length; p += 4) {
+        sum += d[p]
+        sq += d[p] * d[p]
+        n++
+      }
+      const mean = sum / n
+      return sq / n - mean * mean
+    }
+    const v1 = variance(1)
+    const v15 = variance(1.5)
+    const v2 = variance(2)
+    expect(v15).toBeLessThan(v1) // 1.5 blurs more than 1
+    expect(v2).toBeLessThan(v15) // 2 blurs more than 1.5
+    expect(variance(0.5)).toBeLessThan(variance(0)) // even the smallest step blurs
+  })
+
   it('whitePoint <= blackPoint is guarded (no division blowup)', () => {
     const out = preprocess(flat(2, 1, [100, 100, 100]), {
       ...IDENTITY_PRE,

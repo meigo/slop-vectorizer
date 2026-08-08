@@ -149,7 +149,7 @@
         type="range"
         min="0"
         max="10"
-        step="1"
+        step="0.5"
         bind:value={options.blurRadius}
         oninput={onchange}
       /></label

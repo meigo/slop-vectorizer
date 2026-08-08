@@ -53,6 +53,26 @@ function boxBlurPass(src: Float32Array, w: number, h: number, r: number): Float3
  * Apply levels, blur, and saturation adjustments. Aggressive blackPoint/whitePoint levels clip anti-aliased
  * edge gradients toward binary coverage, which degrades downstream sub-pixel boundary refinement toward pixel-grid accuracy.
  */
+/**
+ * Odd box widths whose composed passes best approximate a Gaussian of the given
+ * sigma (standard boxes-for-Gaussian). Fractional sigmas shift the widths at
+ * sub-integer increments, making the blur slider effectively continuous.
+ */
+function boxesForGauss(sigma: number, n: number): number[] {
+  const wIdeal = Math.sqrt((12 * sigma * sigma) / n + 1)
+  let wl = Math.floor(wIdeal)
+  if (wl % 2 === 0) wl--
+  wl = Math.max(1, wl)
+  const wu = wl + 2
+  const mIdeal = (12 * sigma * sigma - n * wl * wl - 4 * n * wl - 3 * n) / (-4 * wl - 4)
+  const m = Math.min(n, Math.max(0, Math.round(mIdeal)))
+  const widths = Array.from({ length: n }, (_, i) => (i < m ? wl : wu))
+  // A nonzero blur setting must blur: if sigma rounds every pass to identity
+  // (all widths 1, i.e. wl === 1 chosen for every pass), force one minimal real pass.
+  if (wl === 1 && m === n) widths[n - 1] = 3
+  return widths
+}
+
 export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
   if (isIdentityPre(opts)) return image
   const { width: w, height: h } = image
@@ -60,8 +80,10 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
   for (let i = 0; i < image.data.length; i++) data[i] = image.data[i]
   let working: Float32Array = data
   if (opts.blurRadius > 0) {
-    const r = Math.max(1, Math.round(opts.blurRadius))
-    for (let i = 0; i < 3; i++) working = boxBlurPass(working, w, h, r)
+    for (const width of boxesForGauss(opts.blurRadius, 3)) {
+      const r = (width - 1) / 2
+      if (r > 0) working = boxBlurPass(working, w, h, r)
+    }
   }
   const black = opts.blackPoint
   const white = Math.max(opts.whitePoint, black + 1)
