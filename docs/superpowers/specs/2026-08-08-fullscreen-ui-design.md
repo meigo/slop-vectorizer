@@ -34,7 +34,11 @@ Replace the boxed, page-flow layout with a full-viewport workspace: two zoom/pan
   5. **Output**: Optimize, Merge colors, Transparent bg
   6. **Download SVG** button
   7. Footer: stats line (paths · points · ms · kB, per-stage timings) and the downscale notice when applicable
-- Fit-to-view triggers, as today, when image dimensions change (dimension-keyed), computed against the active mode's pane size; window resize does not auto-refit (Fit button covers it).
+- Fit-to-view triggers, as today, when image dimensions change (dimension-keyed), computed against the active mode's pane size.
+
+## Addendum (v1.3.1): fit-until-touched resize refit
+
+`Viewport` gains a `touched` flag ($state, initially false): set by `wheelAt()` and `panBy()` (manual adjustment), cleared by `fitTo()` (fitting re-arms auto-fit; the Fit button and every new-image fit therefore re-arm it). App adds one `$effect` that reads the active pane geometry (`viewsW`, `viewsH`, mode/column state — the same inputs `fit()` uses) and `viewport.touched`, and calls `fit()` on any pane-geometry change while `touched` is false. This yields: auto-refit on window resize until the user manually zooms/pans; deliberate zoom/pan is never yanked by a resize; mode toggles and the split-mode result-arrival column flip also refit while untouched (resolving the parked half-width edge from the final review). No pipeline changes.
 
 ## Unchanged
 
@@ -48,4 +52,4 @@ Pipeline, worker, decode, options semantics, debounced re-runs, 'cancelled' hand
 
 ## Out of scope
 
-Mobile/responsive layout, collapsible panel, keyboard shortcuts, persisting view mode across sessions, fit-on-window-resize.
+Mobile/responsive layout, collapsible panel, keyboard shortcuts, persisting view mode across sessions. (Fit-on-window-resize was out of scope for v1.3; added in the v1.3.1 addendum above.)
