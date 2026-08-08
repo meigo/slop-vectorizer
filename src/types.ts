@@ -11,6 +11,10 @@ export interface PipelineOptions {
   mergePaths: boolean         // one <path> per palette color
   transparentBg: boolean      // skip background-colored regions
   optimize: boolean           // compact path serialization
+  blackPoint: number          // levels black point, 0..255
+  whitePoint: number          // levels white point, 0..255
+  blurRadius: number          // pre-blur box radius, px
+  saturation: number          // 1 = unchanged
 }
 
 export const DEFAULT_OPTIONS: PipelineOptions = {
@@ -20,6 +24,10 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
   mergePaths: true,
   transparentBg: false,
   optimize: true,
+  blackPoint: 0,
+  whitePoint: 255,
+  blurRadius: 0,
+  saturation: 1,
 }
 
 export interface Palette {
@@ -39,7 +47,7 @@ export interface RegionLoops {
   loops: Float64Array[] // interleaved x,y; implicitly closed
 }
 
-export type StageName = 'palette' | 'segment' | 'boundaries' | 'corners' | 'fit' | 'svg'
+export type StageName = 'pre' | 'palette' | 'segment' | 'boundaries' | 'corners' | 'fit' | 'svg'
 
 export interface PipelineStats {
   pathCount: number
@@ -52,11 +60,14 @@ export interface VectorResult {
   stats: PipelineStats
 }
 
+// what the client resolves vectorize() with
+export type ClientResult = VectorResult & { preImage?: RasterImage }
+
 // Worker protocol
 export type WorkerRequest =
   | { type: 'vectorize'; image: RasterImage; options: PipelineOptions; jobId: number }
 
 export type WorkerResponse =
   | { type: 'progress'; jobId: number; stage: StageName }
-  | { type: 'result'; jobId: number; result: VectorResult }
+  | { type: 'result'; jobId: number; result: VectorResult; preImage?: RasterImage }
   | { type: 'error'; jobId: number; stage: StageName | 'unknown'; message: string }

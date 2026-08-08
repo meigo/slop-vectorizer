@@ -1,4 +1,5 @@
 import type { RasterImage, PipelineOptions, StageName, VectorResult, PipelineStats } from '../../types'
+import { preprocess, isIdentityPre, type PreOptions } from './preprocess'
 import { estimatePalette } from './palette'
 import { segmentImage } from './segment'
 import { extractBoundaries } from './boundaries'
@@ -19,9 +20,14 @@ export function vectorize(
     timings[name] = performance.now() - t0
     return r
   }
-  const palette = stage('palette', () => estimatePalette(image, options.colorCount))
-  const seg = stage('segment', () => segmentImage(image, palette, options.despeckleSize))
-  const bounds = stage('boundaries', () => extractBoundaries(image, seg, palette))
+  const preOpts: PreOptions = {
+    blackPoint: options.blackPoint, whitePoint: options.whitePoint,
+    blurRadius: options.blurRadius, saturation: options.saturation,
+  }
+  const src = isIdentityPre(preOpts) ? image : stage('pre', () => preprocess(image, preOpts))
+  const palette = stage('palette', () => estimatePalette(src, options.colorCount))
+  const seg = stage('segment', () => segmentImage(src, palette, options.despeckleSize))
+  const bounds = stage('boundaries', () => extractBoundaries(src, seg, palette))
   const cornersPerLoop = stage('corners', () =>
     bounds.map(r => r.loops.map(l => findCorners(l))))
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
