@@ -72,3 +72,7 @@ Sharpen/brightness/contrast effects, hysteresis/connectivity-based segmentation 
 ## Addendum (v1.3.2): gap-closing range scales with upscale
 
 The gap-closing slider max becomes `3 × upscale` (×1 → 3, ×2 → 6, ×3 → 9; step 1; units remain working-image pixels, matching Despeckle). Rationale: upscaling multiplies the pixel span of a physical gap, so a fixed cap of 3 shrinks the bridgeable physical gap at ×2/×3; scaling the cap keeps "max ~6px bridge at native scale" invariant. The pipeline safety clamp in segment.ts rises from 3 to 9 (absolute ceiling). Lowering upscale clamps `options.gapClosing` down to the new max before re-decode, so an out-of-range value never survives invisibly. Accepted cost: the O(n·r) closing pass is slower at r=9 on large images (opt-in, cached behind the segment tier).
+
+## Addendum (v1.3.3): continuous blur
+
+`blurRadius` becomes a continuous blur strength (slider 0–10, step 0.5). `preprocess` maps it through the standard boxes-for-Gaussian computation: three box widths (odd, two may differ by 2) chosen so the composed passes best approximate a Gaussian of sigma = blurRadius, replacing the previous three equal integer-radius passes. Effective blur now changes at sub-integer slider steps. Same O(n) running-sum passes, deterministic. Test: variance after blur 1.5 lies strictly between variance after 1.0 and after 2.0.
