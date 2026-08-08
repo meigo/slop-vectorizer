@@ -72,15 +72,27 @@
   })
 
   // Overrides are index-aligned with the palette they were made for; when a new
-  // result arrives with a different palette, they're stale — drop them and rerun
-  // so the mismatched-override render is bounded to one debounce cycle instead of
-  // persisting indefinitely.
+  // result arrives with a genuinely different palette, they're stale — drop them
+  // and rerun so the mismatched-override render is bounded to one debounce cycle.
+  // "Different" is tolerance-based: re-estimation on resampled/adjusted pixels
+  // (upscale, mild pre-effects) wobbles colors by a few RGB units without changing
+  // what they are; overrides survive that (index alignment holds — the palette is
+  // luminance-sorted). Only a different k or a materially moved color resets.
+  const PALETTE_TOL_SQ = 20 * 20
+  function paletteDiffers(a: number[], b: number[]): boolean {
+    if (a.length !== b.length) return true
+    for (let i = 0; i < a.length; i += 3) {
+      const dr = a[i] - b[i]
+      const dg = a[i + 1] - b[i + 1]
+      const db = a[i + 2] - b[i + 2]
+      if (dr * dr + dg * dg + db * db > PALETTE_TOL_SQ) return true
+    }
+    return false
+  }
   $effect(() => {
     const pal = result?.palette
     if (!pal) return
-    const changed =
-      lastPalette !== null &&
-      (lastPalette.length !== pal.length || lastPalette.some((v, i) => v !== pal[i]))
+    const changed = lastPalette !== null && paletteDiffers(lastPalette, pal)
     if (changed && options.colorOverrides) {
       options.colorOverrides = null
       rerun()
