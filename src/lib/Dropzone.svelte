@@ -52,16 +52,17 @@
 
 <style>
   .dropzone {
-    border: 2px dashed #888;
+    border: 2px dashed var(--color-border);
     border-radius: 8px;
     padding: 3rem;
     text-align: center;
-    color: #666;
+    color: var(--color-text-secondary);
+    background: var(--color-surface);
     cursor: pointer;
   }
   .dropzone.dragging {
-    border-color: #4a90d9;
-    background: #4a90d910;
+    border-color: var(--color-selection);
+    background: color-mix(in srgb, var(--color-selection) 8%, var(--color-surface));
   }
   .error {
     color: #c0392b;

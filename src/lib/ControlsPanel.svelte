@@ -1,5 +1,7 @@
 <!-- src/lib/ControlsPanel.svelte -->
 <script lang="ts">
+  import { Moon, Sun, Columns2, SquareSplitHorizontal, Maximize } from '@lucide/svelte'
+  import { theme } from './theme.svelte'
   import type { PipelineOptions, PipelineStats } from '../types'
 
   let {
@@ -69,15 +71,22 @@
 <div class="cp">
   <header>
     <strong>slop-vectorizer</strong>
+    <button class="icon-btn" onclick={() => theme.toggle()} title="Toggle theme">
+      {#if theme.current === 'dark'}<Sun size={14} />{:else}<Moon size={14} />{/if}
+    </button>
     <button onclick={onnew}>New image</button>
   </header>
 
   <section>
     <div class="label">View</div>
     <div class="row">
-      <button onclick={() => (mode = 'side')} class:active={mode === 'side'}>Side by side</button>
-      <button onclick={() => (mode = 'split')} class:active={mode === 'split'}>Split</button>
-      <button onclick={onfit}>Fit</button>
+      <button onclick={() => (mode = 'side')} class:active={mode === 'side'} title="Side by side"
+        ><Columns2 size={14} /></button
+      >
+      <button onclick={() => (mode = 'split')} class:active={mode === 'split'} title="Split"
+        ><SquareSplitHorizontal size={14} /></button
+      >
+      <button onclick={onfit} title="Fit"><Maximize size={14} /></button>
     </div>
   </section>
 
@@ -251,7 +260,7 @@
     flex-direction: column;
     gap: 1rem;
     font-size: 0.9rem;
-    color: #444;
+    color: var(--color-text-secondary);
     min-height: 100%;
   }
   header {
@@ -259,11 +268,17 @@
     justify-content: space-between;
     align-items: center;
   }
+  header strong {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
   .label {
-    font-size: 0.7rem;
+    font-size: 10px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #999;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
     margin-bottom: 0.4rem;
   }
   section label {
@@ -272,6 +287,7 @@
     align-items: center;
     gap: 0.5rem;
     margin: 0.3rem 0;
+    font-size: 11px;
   }
   section label.check {
     justify-content: flex-start;
@@ -281,9 +297,31 @@
     display: flex;
     gap: 0.4rem;
   }
+  .row button {
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   .row button.active {
-    background: #4a90d9;
-    color: white;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+  }
+  .icon-btn {
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+  }
+  .icon-btn:hover {
+    background: var(--color-surface-hover);
   }
   .swatches {
     display: flex;
@@ -295,7 +333,7 @@
   .swatch {
     width: 22px;
     height: 22px;
-    border: 1px solid #0003;
+    border: 1px solid var(--color-border);
     border-radius: 4px;
     cursor: pointer;
     position: relative;
@@ -304,7 +342,7 @@
     content: '';
     position: absolute;
     inset: -3px;
-    border: 2px solid #4a90d9;
+    border: 2px solid var(--color-selection);
     border-radius: 6px;
   }
   .swatch input {
@@ -316,20 +354,26 @@
   .reset-colors {
     background: none;
     border: none;
-    color: #4a90d9;
+    color: var(--color-selection);
     cursor: pointer;
     font-size: 0.8rem;
     padding: 0;
   }
   .download {
     padding: 0.5rem;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    border-color: var(--color-accent);
+  }
+  .download:hover {
+    opacity: 0.85;
   }
   .notice {
     color: #b8860b;
   }
   footer {
     margin-top: auto;
-    color: #888;
+    color: var(--color-text-muted);
     font-size: 0.8rem;
   }
   footer .stats {
@@ -338,7 +382,7 @@
     line-height: 1.35;
   }
   footer .stages {
-    color: #aaa;
+    color: var(--color-text-muted);
     font-size: 0.75rem;
   }
 </style>

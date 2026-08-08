@@ -83,7 +83,11 @@
   .pane {
     position: relative;
     overflow: hidden;
-    background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;
+    background: repeating-conic-gradient(
+        var(--color-border-light) 0% 25%,
+        var(--color-surface) 0% 50%
+      )
+      0 0 / 16px 16px;
     touch-action: none;
     cursor: grab;
   }
@@ -103,8 +107,8 @@
     top: 8px;
     left: 10px;
     font-size: 12px;
-    color: #555;
-    background: #ffffffcc;
+    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--color-surface) 80%, transparent);
     padding: 2px 8px;
     border-radius: 4px;
     pointer-events: none;

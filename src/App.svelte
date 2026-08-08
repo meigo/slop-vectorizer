@@ -236,12 +236,6 @@
 {/if}
 
 <style>
-  :global(html),
-  :global(body),
-  :global(#app) {
-    height: 100%;
-    margin: 0;
-  }
   .app-grid {
     display: grid;
     grid-template-columns: 1fr 300px;
@@ -252,6 +246,7 @@
     display: grid;
     min-width: 0;
     position: relative;
+    background: var(--color-canvas-bg);
   }
   .views.side {
     grid-template-columns: 1fr 1fr;
@@ -262,8 +257,9 @@
     bottom: 1rem;
     left: 50%;
     transform: translateX(-50%);
-    background: #333c;
-    color: white;
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    opacity: 0.85;
     font-family: system-ui, sans-serif;
     font-size: 0.85rem;
     padding: 0.35rem 0.9rem;
@@ -272,16 +268,16 @@
   }
   .panel {
     overflow-y: auto;
-    border-left: 1px solid #ddd;
+    border-left: 1px solid var(--color-border);
+    background: var(--color-surface);
     padding: 0.75rem;
-    font-family: system-ui, sans-serif;
   }
   .empty {
     height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-family: system-ui, sans-serif;
+    background: var(--color-canvas-bg);
   }
   .toast {
     position: fixed;

@@ -111,7 +111,12 @@
     position: relative;
     overflow: hidden;
     height: 100%;
-    background: repeating-conic-gradient(#f0f0f0 0% 25%, #fff 0% 50%) 0 0 / 16px 16px;
+    border: 1px solid var(--color-border);
+    background: repeating-conic-gradient(
+        var(--color-border-light) 0% 25%,
+        var(--color-surface) 0% 50%
+      )
+      0 0 / 16px 16px;
     touch-action: none;
     cursor: grab;
   }
@@ -143,6 +148,6 @@
     content: '';
     position: absolute;
     inset: 0 3px;
-    background: #4a90d9;
+    background: var(--color-selection);
   }
 </style>
