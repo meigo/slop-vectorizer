@@ -21,6 +21,7 @@
   // Stages skipped by the worker cache are absent from timings, so they stay out of the line.
   const stageMs = (s: PipelineStats) =>
     Object.entries(s.timings).map(([name, ms]) => `${name} ${(ms ?? 0).toFixed(0)}`).join(' · ')
+  const sizeKb = (s: string) => (new TextEncoder().encode(s).length / 1024).toFixed(1) + ' kB'
 </script>
 
 <div class="controls">
@@ -47,10 +48,13 @@
     Despeckle
     <input type="range" min="1" max="64" step="1" bind:value={options.despeckleSize} oninput={onchange} />
   </label>
+  <label><input type="checkbox" bind:checked={options.optimize} onchange={onchange} /> Optimize</label>
+  <label><input type="checkbox" bind:checked={options.mergePaths} onchange={onchange} /> Merge colors</label>
+  <label><input type="checkbox" bind:checked={options.transparentBg} onchange={onchange} /> Transparent bg</label>
   <button onclick={download} disabled={!svg}>Download SVG</button>
   {#if stats}
     <span class="stats">
-      <span>{stats.pathCount} paths · {stats.pointCount} points · {totalMs(stats)} ms</span>
+      <span>{stats.pathCount} paths · {stats.pointCount} points · {totalMs(stats)} ms{#if svg} · {sizeKb(svg)}{/if}</span>
       {#if stageMs(stats)}<span class="stages">{stageMs(stats)}</span>{/if}
     </span>
   {/if}
