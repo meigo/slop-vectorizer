@@ -120,6 +120,7 @@ function run(
     jobId,
     result: { svg, stats: { pathCount, pointCount, timings } },
     ...(identity ? {} : { preImage: src }),
+    palette: Array.from(cache.palette!.colors),
   })
 }
 

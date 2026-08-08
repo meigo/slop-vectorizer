@@ -34,7 +34,7 @@ export class VectorizerClient {
         if (m.type === 'progress') onProgress?.(m.stage)
         else if (m.type === 'result') {
           this.pending = null
-          resolve({ ...m.result, preImage: m.preImage })
+          resolve({ ...m.result, preImage: m.preImage, palette: m.palette })
         } else {
           this.pending = null
           reject(new Error(`${m.stage}: ${m.message}`))

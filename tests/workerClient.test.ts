@@ -52,4 +52,25 @@ describe('VectorizerClient concurrent vectorize() calls', () => {
 
     await expect(p2).resolves.toEqual(result.result)
   })
+
+  it('passes palette through to the resolved result', async () => {
+    instances.length = 0
+    const client = new VectorizerClient()
+
+    const promise = client.vectorize(image, DEFAULT_OPTIONS)
+
+    expect(instances).toHaveLength(1)
+    const worker = instances[0]
+
+    const result: WorkerResponse = {
+      type: 'result',
+      jobId: 1,
+      result: { svg: '<svg/>', stats: { pathCount: 0, pointCount: 0, timings: {} } },
+      palette: [10, 20, 30, 240, 240, 240],
+    }
+    worker.onmessage?.({ data: result } as MessageEvent<WorkerResponse>)
+
+    const res = await promise
+    expect(res.palette).toEqual([10, 20, 30, 240, 240, 240])
+  })
 })

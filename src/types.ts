@@ -65,7 +65,7 @@ export interface VectorResult {
 }
 
 // what the client resolves vectorize() with
-export type ClientResult = VectorResult & { preImage?: RasterImage }
+export type ClientResult = VectorResult & { preImage?: RasterImage; palette?: number[] }
 
 // Worker protocol
 export type WorkerRequest = {
@@ -77,5 +77,11 @@ export type WorkerRequest = {
 
 export type WorkerResponse =
   | { type: 'progress'; jobId: number; stage: StageName }
-  | { type: 'result'; jobId: number; result: VectorResult; preImage?: RasterImage }
+  | {
+      type: 'result'
+      jobId: number
+      result: VectorResult
+      preImage?: RasterImage
+      palette: number[]
+    }
   | { type: 'error'; jobId: number; stage: StageName | 'unknown'; message: string }
