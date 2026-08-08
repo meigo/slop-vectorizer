@@ -129,4 +129,33 @@ describe('gap closing', () => {
     const b = segmentImage(img, pal, 4) // default param
     expect([...a.labelMap]).toEqual([...b.labelMap])
   })
+
+  it('radii above 3 work (upscale-scaled range): 7px gaps bridge at r=4, not r=3', () => {
+    // Wide-gap variant of the dash fixture: 8px dashes, 7px residue gaps. 7 > 2*3,
+    // so r=3 cannot bridge; 7 <= 2*4 can. Under the old hard clamp min(3, r) an r=4
+    // request silently degraded to r=3 — this pins the raised ceiling.
+    const w = 120,
+      h = 64
+    const data = new Uint8ClampedArray(w * h * 4)
+    for (let p = 0; p < data.length; p += 4) {
+      data[p] = PAPER
+      data[p + 1] = PAPER
+      data[p + 2] = PAPER
+      data[p + 3] = 255
+    }
+    const set = (x: number, y: number, v: number) => {
+      const o = (y * w + x) * 4
+      data[o] = v
+      data[o + 1] = v
+      data[o + 2] = v
+    }
+    for (let y = 40; y < 48; y++) for (let x = 8; x < 112; x++) set(x, y, INK) // thick anchor
+    const DASH = 8,
+      GAP = 7,
+      PERIOD = DASH + GAP
+    for (let x = 8; x < 112; x++) set(x, 20, (x - 8) % PERIOD < DASH ? INK : 145)
+    const img: RasterImage = { width: w, height: h, data }
+    expect(inkRegionCount(img, 3)).toBeGreaterThan(2) // still fragmented
+    expect(inkRegionCount(img, 4)).toBe(2) // anchor + one connected stroke
+  })
 })

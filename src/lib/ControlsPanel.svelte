@@ -102,11 +102,13 @@
         oninput={onchange}
       />
     </label>
+    <!-- Max scales with upscale: gaps span upscale× more pixels, so the cap keeps
+         the same ~6px physical bridge limit at native scale. -->
     <label
       >Gap closing <input
         type="range"
         min="0"
-        max="3"
+        max={3 * upscale}
         step="1"
         bind:value={options.gapClosing}
         oninput={onchange}

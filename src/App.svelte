@@ -96,6 +96,9 @@
   }
 
   function handleUpscale() {
+    // Gap-closing max is 3 × upscale; clamp a now-out-of-range value down so it
+    // never silently exceeds the visible slider range after lowering upscale.
+    options.gapClosing = Math.min(options.gapClosing, 3 * upscale)
     if (sourceFile) void decodeAndRun(sourceFile)
   }
 

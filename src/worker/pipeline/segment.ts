@@ -28,7 +28,8 @@ export function segmentImage(
   for (let p = 0; p < n; p++)
     colorIdx[p] = nearestPaletteIndex(palette, data[4 * p], data[4 * p + 1], data[4 * p + 2])
 
-  if (gapClosing > 0) closeGaps(colorIdx, image, palette, Math.min(3, Math.round(gapClosing)))
+  // Ceiling 9 = max slider (3) × max upscale (3); the UI scales the slider with upscale.
+  if (gapClosing > 0) closeGaps(colorIdx, image, palette, Math.min(9, Math.round(gapClosing)))
 
   // Connected components (4-connectivity) over colorIdx
   const label = new Int32Array(n).fill(-1)
