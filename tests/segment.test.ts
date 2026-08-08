@@ -29,7 +29,7 @@ describe('segmentImage', () => {
 
 const INK = 30, PAPER = 245
 
-function strokesFixture(withThin: boolean): RasterImage {
+function strokesFixture(withThin: boolean, residue = 145): RasterImage {
   const w = 120, h = 64
   const data = new Uint8ClampedArray(w * h * 4)
   const rand = mulberry32(7)
@@ -44,14 +44,14 @@ function strokesFixture(withThin: boolean): RasterImage {
   for (let y = 40; y < 48; y++) for (let x = 8; x < 112; x++) set(x, y, INK) // thick anchor
   if (withThin) {
     // Dashed thin stroke: 6px solid-ink dashes separated by 3px gaps carrying a faint
-    // near-ink residue (v=145). despeckleSize=4 in these tests, so each 6px dash survives
-    // as its own region at gapClosing 0 (fragmentation); each 3px gap is <= 2*gapClosing(2),
-    // so a gapClosing-2 morphological close bridges it. The guard (1.3x) only welds a gap
-    // pixel to ink when it's already color-ambiguous: |v-INK| <= 1.3*|v-PAPER| holds up to
-    // v=151.5 here, so v=145 passes (residue) while clean PAPER (v=245) never does.
-    const DASH = 6, GAP = 3, PERIOD = DASH + GAP, RESIDUE = 145
+    // near-ink residue (default v=145). despeckleSize=4 in these tests, so each 6px dash
+    // survives as its own region at gapClosing 0 (fragmentation); each 3px gap is
+    // <= 2*gapClosing(2), so a gapClosing-2 morphological close bridges it. The guard (1.3x)
+    // only welds a gap pixel to ink when it's already color-ambiguous: |v-INK| <= 1.3*|v-PAPER|
+    // holds up to v=151.5 here, so v=145 passes (residue) while clean PAPER (v=245) never does.
+    const DASH = 6, GAP = 3, PERIOD = DASH + GAP
     for (let x = 8; x < 112; x++)
-      set(x, 20, (x - 8) % PERIOD < DASH ? INK : RESIDUE)
+      set(x, 20, (x - 8) % PERIOD < DASH ? INK : residue)
   }
   return { width: w, height: h, data }
 }
@@ -84,6 +84,20 @@ describe('gap closing', () => {
     for (let x = 8; x < 112; x++) { set(x, 20); set(x, 24) } // rows 20 and 24, clean paper between
     const img: RasterImage = { width: w, height: h, data }
     expect(inkRegionCount(img, 2)).toBe(2) // still two separate strokes
+  })
+
+  it('guard pins the 1.3 constant: residue=160 (needs >=1.53 to weld) must NOT connect at gapClosing 2', () => {
+    // |v-INK| <= 1.3*|v-PAPER| solves to v <= 151.5 for INK=30/PAPER=245 — 160 is past that
+    // cutoff (it would need the constant raised to ~1.53+ to pass), so every gap pixel must
+    // fail the guard and the dashes must stay fragmented even though the 3px gap is well
+    // within the gapClosing=2 morphological reach. This pins 1.3 to the interval [~1.15, 1.53):
+    // the residue=145 tests above already require the constant to be >= ~1.15 to weld.
+    const img = strokesFixture(true, 160)
+    const pal = estimatePalette(img, 2)
+    const lum = (i: number) => pal.colors[3 * i] + pal.colors[3 * i + 1] + pal.colors[3 * i + 2]
+    expect(Math.min(lum(0), lum(1))).toBeLessThan(100) // palette still resolves ~[30, 245]
+    expect(Math.max(lum(0), lum(1))).toBeGreaterThan(700)
+    expect(inkRegionCount(img, 2)).toBeGreaterThan(2)
   })
 
   it('gapClosing 0 is byte-identical to previous behavior', () => {

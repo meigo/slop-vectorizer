@@ -118,6 +118,19 @@ function minMaxFilter(src: Uint8Array, dst: Uint8Array, w: number, h: number, r:
     }
 }
 
+/**
+ * Each gap pixel is guarded independently against its own color, not against the gap as a
+ * whole: a pixel only flips if it individually sits within 1.3x of the candidate color. A
+ * gap whose residue lightens toward its middle (e.g. anti-aliased dash ends fading to full
+ * paper) can therefore fail to bridge partway through even when the whole gap is well within
+ * 2*gapClosing of a morphological reach — the closing dilates/erodes geometrically regardless,
+ * but individual center pixels can still be too far in color to pass the guard, leaving the
+ * stroke re-fragmented at that point. This is intentional (it's what stops clean parallel
+ * strokes from welding), but it means gap closing alone won't rescue every dashed stroke: the
+ * blur/levels pre-effects upstream (src/worker/pipeline/preprocess.ts) are the intended
+ * companion — flattening and darkening gap profiles before segmentation so more of each gap
+ * survives the guard here.
+ */
 function closeGaps(colorIdx: Int32Array, image: RasterImage, palette: Palette, r: number): void {
   const { width: w, height: h, data } = image
   const n = w * h
