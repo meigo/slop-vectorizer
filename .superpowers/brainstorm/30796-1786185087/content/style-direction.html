@@ -1,0 +1,148 @@
+<h2>Which styling direction for the controls panel?</h2>
+<p class="subtitle">Faithful mini-renders of your actual panel (View / Vectorize + swatches / Input / Output). Same structure, three family dialects.</p>
+
+<style>
+  .mock-panel { width: 250px; font-size: 11px; user-select: none; }
+  .mock-panel * { box-sizing: border-box; }
+  .mp-slider { height: 3px; border-radius: 2px; position: relative; margin: 7px 0; }
+  .mp-thumb { width: 11px; height: 11px; border-radius: 50%; position: absolute; top: -4px; }
+  .mp-row { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
+  .mp-sw { width: 18px; height: 18px; border-radius: 4px; display: inline-block; margin-right: 4px; }
+
+  /* A: paint — monochrome + JetBrains Mono, flush panel, light (dark toggle available) */
+  .pa { background: #ffffff; border-left: 1px solid #e0e0e0; padding: 10px; color: #222;
+        font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; }
+  .pa .hd { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0; margin-bottom: 8px; font-weight: 600; font-size: 11px; }
+  .pa .sec { font-size: 10px; font-weight: 600; color: #666; margin: 10px 0 4px; }
+  .pa .btn { border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; color: #666;
+             padding: 3px 8px; font-size: 10px; font-family: inherit; }
+  .pa .btn.on { background: #222; color: #fff; border-color: #222; }
+  .pa .mp-slider { background: #e0e0e0; }
+  .pa .mp-thumb { background: #222; border: 2px solid #fff; box-shadow: 0 0 0 1px #e0e0e0; left: 55%; }
+  .pa .dl { width: 100%; margin-top: 8px; background: #222; color: #fff; border: none;
+            border-radius: 6px; padding: 6px; font-size: 10px; font-family: inherit; }
+  .pa .stats { color: #999; font-size: 9px; margin-top: 8px; }
+  .pa .darkstrip { margin-top: 10px; background: #1e1e1e; border-radius: 6px; padding: 6px 8px;
+                   color: #e0e0e0; font-size: 9px; display: flex; justify-content: space-between; align-items: center; }
+  .pa .darkstrip .mp-slider { background: #383838; width: 70px; margin: 0; }
+  .pa .darkstrip .mp-thumb { background: #e0e0e0; border-color: #1e1e1e; box-shadow: 0 0 0 1px #383838; }
+
+  /* B: animator — same monochrome tokens, system-ui */
+  .an { background: #ffffff; border-left: 1px solid #e0e0e0; padding: 10px; color: #222;
+        font-family: system-ui, sans-serif; }
+  .an .hd { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px;
+            border-bottom: 1px solid #e0e0e0; margin-bottom: 8px; font-weight: 600; font-size: 12px; }
+  .an .sec { font-size: 11px; font-weight: 600; color: #666; margin: 10px 0 4px; }
+  .an .btn { border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; color: #666;
+             padding: 3px 9px; font-size: 11px; font-family: inherit; }
+  .an .btn.on { background: #222; color: #fff; border-color: #222; }
+  .an .mp-slider { background: #e0e0e0; }
+  .an .mp-thumb { background: #222; border: 2px solid #fff; box-shadow: 0 0 0 1px #e0e0e0; left: 55%; }
+  .an .dl { width: 100%; margin-top: 8px; background: #222; color: #fff; border: none;
+            border-radius: 6px; padding: 6px; font-size: 11px; font-family: inherit; }
+  .an .stats { color: #999; font-size: 10px; margin-top: 8px; }
+  .an .darkstrip { margin-top: 10px; background: #1e1e1e; border-radius: 6px; padding: 6px 8px;
+                   color: #e0e0e0; font-size: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .an .darkstrip .mp-slider { background: #383838; width: 70px; margin: 0; }
+  .an .darkstrip .mp-thumb { background: #e0e0e0; border-color: #1e1e1e; box-shadow: 0 0 0 1px #383838; }
+
+  /* C: compositor — dark-only Inter, blue accent, uppercase labels, card panels */
+  .vc { background: #141416; padding: 10px; color: #f0f0f2;
+        font-family: Inter, system-ui, sans-serif; border-radius: 10px; }
+  .vc .card-p { background: #1c1c20; border: 1px solid #2e2e34; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+  .vc .hd { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 12px; }
+  .vc .sec { font-size: 9px; font-weight: 600; color: #9a9aa3; text-transform: uppercase;
+             letter-spacing: 0.06em; margin: 2px 0 6px; }
+  .vc .btn { border: 1px solid #2e2e34; border-radius: 6px; background: #24242a; color: #f0f0f2;
+             padding: 3px 9px; font-size: 10px; font-family: inherit; }
+  .vc .btn.on { background: #5b8cff; border-color: #5b8cff; color: #fff; }
+  .vc .mp-slider { background: #2e2e34; }
+  .vc .mp-thumb { background: #5b8cff; border: 2px solid #1c1c20; left: 55%; }
+  .vc .dl { width: 100%; background: #5b8cff; color: #fff; border: none; border-radius: 6px;
+            padding: 6px; font-size: 11px; font-weight: 500; font-family: inherit; }
+  .vc .stats { color: #9a9aa3; font-size: 9px; margin-top: 4px; }
+</style>
+
+<div class="cards">
+  <div class="card" data-choice="paint-mono" onclick="toggleSelect(this)">
+    <div class="card-image" style="display:flex;justify-content:center;padding:10px;background:#f5f5f5">
+      <div class="mock-panel pa">
+        <div class="hd"><span>slop-vectorizer</span><button class="btn">New image</button></div>
+        <div class="sec">VIEW</div>
+        <div><button class="btn on">Side by side</button> <button class="btn">Split</button> <button class="btn">Fit</button></div>
+        <div class="sec">VECTORIZE</div>
+        <div class="mp-row"><span>Colors</span><button class="btn">auto ▾</button></div>
+        <div><span class="mp-sw" style="background:#1a1a1a"></span><span class="mp-sw" style="background:#8a8a8a"></span><span class="mp-sw" style="background:#f2efe9;border:1px solid #ddd"></span></div>
+        <div class="mp-row"><span>Smoothness</span></div><div class="mp-slider"><div class="mp-thumb"></div></div>
+        <div class="mp-row"><span>Gap closing</span></div><div class="mp-slider"><div class="mp-thumb" style="left:20%"></div></div>
+        <div class="sec">OUTPUT</div>
+        <div class="mp-row"><span>☑ Optimize &nbsp; ☑ Merge</span></div>
+        <button class="dl">Download SVG</button>
+        <div class="stats">53 paths · 2941 points · 46 ms · 12.4 kB</div>
+        <div class="darkstrip"><span>dark mode ☾</span><div class="mp-slider"><div class="mp-thumb"></div></div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — paint dialect (monospace)</h3>
+      <p>slop-paint's system: monochrome tokens, JetBrains Mono chrome at 11-12px, slim custom sliders, flush docked panel, light + dark toggle. Techy, precise feel.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="animator-system" onclick="toggleSelect(this)">
+    <div class="card-image" style="display:flex;justify-content:center;padding:10px;background:#f5f5f5">
+      <div class="mock-panel an">
+        <div class="hd"><span>slop-vectorizer</span><button class="btn">New image</button></div>
+        <div class="sec">View</div>
+        <div><button class="btn on">Side by side</button> <button class="btn">Split</button> <button class="btn">Fit</button></div>
+        <div class="sec">Vectorize</div>
+        <div class="mp-row"><span>Colors</span><button class="btn">auto ▾</button></div>
+        <div><span class="mp-sw" style="background:#1a1a1a"></span><span class="mp-sw" style="background:#8a8a8a"></span><span class="mp-sw" style="background:#f2efe9;border:1px solid #ddd"></span></div>
+        <div class="mp-row"><span>Smoothness</span></div><div class="mp-slider"><div class="mp-thumb"></div></div>
+        <div class="mp-row"><span>Gap closing</span></div><div class="mp-slider"><div class="mp-thumb" style="left:20%"></div></div>
+        <div class="sec">Output</div>
+        <div class="mp-row"><span>☑ Optimize &nbsp; ☑ Merge</span></div>
+        <button class="dl">Download SVG</button>
+        <div class="stats">53 paths · 2941 points · 46 ms · 12.4 kB</div>
+        <div class="darkstrip"><span>dark mode ☾</span><div class="mp-slider"><div class="mp-thumb"></div></div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — animator dialect (system font)</h3>
+      <p>Same monochrome token system and controls as A, but system-ui instead of monospace — quieter, more neutral. Light + dark toggle.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="compositor-dark" onclick="toggleSelect(this)">
+    <div class="card-image" style="display:flex;justify-content:center;padding:10px;background:#0e0e10">
+      <div class="mock-panel vc">
+        <div class="card-p">
+          <div class="hd"><span>slop-vectorizer</span><button class="btn">New image</button></div>
+        </div>
+        <div class="card-p">
+          <div class="sec">View</div>
+          <div><button class="btn on">Side by side</button> <button class="btn">Split</button> <button class="btn">Fit</button></div>
+        </div>
+        <div class="card-p">
+          <div class="sec">Vectorize</div>
+          <div class="mp-row"><span>Colors</span><button class="btn">auto ▾</button></div>
+          <div><span class="mp-sw" style="background:#1a1a1a;border:1px solid #444"></span><span class="mp-sw" style="background:#8a8a8a"></span><span class="mp-sw" style="background:#f2efe9"></span></div>
+          <div class="mp-row"><span>Smoothness</span></div><div class="mp-slider"><div class="mp-thumb"></div></div>
+          <div class="mp-row"><span>Gap closing</span></div><div class="mp-slider"><div class="mp-thumb" style="left:20%"></div></div>
+        </div>
+        <div class="card-p">
+          <div class="sec">Output</div>
+          <div class="mp-row"><span>☑ Optimize &nbsp; ☑ Merge</span></div>
+        </div>
+        <button class="dl">Download SVG</button>
+        <div class="stats">53 paths · 2941 points · 46 ms · 12.4 kB</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — compositor dialect (dark, blue accent)</h3>
+      <p>slop-video-compositor's system: dark-only, Inter, real blue accent, uppercase letter-spaced section labels, floating card panels. Most "pro tool" looking; no light mode.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle">Mixing is allowed — e.g. B's tokens with C's uppercase section labels. Click a card, and add any notes in the terminal.</p>
