@@ -290,3 +290,35 @@ describe('vectorize round-trip', () => {
     expect(fills(at2x.svg)).toEqual(fills(at1x.svg))
   })
 })
+
+describe('stacked shapes e2e', () => {
+  // 80x80 white image with a black ring centered at (40,40): outer radius 25,
+  // inner radius 12 -> three regions (white bg, black ring, white inner disc).
+  const ring = () => renderShape(80, 80, insideRing(40, 40, 18.5, 6.5), [0, 0, 0], [255, 255, 255])
+  const flatOpts = { ...DEFAULT_OPTIONS, colorCount: 2, despeckleSize: 0, mergePaths: false }
+  const stackedOpts = { ...flatOpts, stackedShapes: true }
+
+  it('emits solid single-subpath shapes in containment order and shrinks the file', () => {
+    const flat = vectorize(ring(), flatOpts).svg
+    const stacked = vectorize(ring(), stackedOpts).svg
+    expect((stacked.match(/<path/g) ?? []).length).toBe(3)
+    // one subpath per path: 3 M commands total vs 5 flat (bg + ring each carry a hole)
+    expect((stacked.match(/M/g) ?? []).length).toBe(3)
+    expect((flat.match(/M/g) ?? []).length).toBe(5)
+    // containment order: white bg first, black ring second, white disc last (visible)
+    const fills = [...stacked.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1])
+    expect(fills[0]).toBe(fills[2]) // bg and disc share the white palette color
+    expect(fills[1]).not.toBe(fills[0]) // ring between them
+    expect(stacked.length).toBeLessThan(flat.length)
+  })
+
+  it('ignores transparentBg and mergePaths while stacked', () => {
+    const base = vectorize(ring(), stackedOpts).svg
+    const noisy = vectorize(ring(), {
+      ...stackedOpts,
+      transparentBg: true,
+      mergePaths: true,
+    }).svg
+    expect(noisy).toBe(base)
+  })
+})

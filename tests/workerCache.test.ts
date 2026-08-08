@@ -29,6 +29,9 @@ describe('firstDirtyStage', () => {
     expect(firstDirtyStage(base, { ...base, gapClosing: 2 }, true)).toBe('segment'))
   it('colorOverrides change -> fit', () =>
     expect(firstDirtyStage(base, { ...base, colorOverrides: ['#ff0000'] }, true)).toBe('fit'))
+  it('stackedShapes change re-enters at fit', () => {
+    expect(firstDirtyStage(base, { ...base, stackedShapes: true }, true)).toBe('fit')
+  })
 })
 
 describe('sameImageData', () => {

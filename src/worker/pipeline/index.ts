@@ -52,30 +52,55 @@ export function vectorize(
   const bounds = stage('boundaries', () => extractBoundaries(src, seg, palette))
   // Areas rank the paths and pick the background; they only depend on the raw
   // polylines, so they are computed once from the arcs rather than per fit.
-  const areas = bounds.regions.map((r) =>
-    Math.max(...r.loops.map((refs) => Math.abs(polygonArea(loopPointsOf(bounds.arcs, refs))))),
+  const loopAreas = bounds.regions.map((r) =>
+    r.loops.map((refs) => Math.abs(polygonArea(loopPointsOf(bounds.arcs, refs)))),
   )
+  const areas = loopAreas.map((la) => Math.max(...la))
+  const outerLoop = loopAreas.map((la) => la.indexOf(Math.max(...la)))
   const cornersPerArc = stage('corners', () =>
     bounds.arcs.map((a) => (a.closed ? findCorners(a.points) : findOpenCorners(a.points))),
   )
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
+  const stacked = options.stackedShapes
+  const firstPixel = new Int32Array(seg.regionCount).fill(-1)
+  if (stacked) {
+    let seen = 0
+    for (let i = 0; i < seg.labelMap.length && seen < seg.regionCount; i++) {
+      if (firstPixel[seg.labelMap[i]] === -1) {
+        firstPixel[seg.labelMap[i]] = i
+        seen++
+      }
+    }
+  }
   const paths = stage('fit', () => {
     // Each arc is fitted once, in its stored direction; the region that traverses it
     // backwards reuses the same cubics reversed exactly, so a shared boundary is the
-    // same curve on both sides by construction.
+    // same curve on both sides by construction. Stacked mode keeps only each region's
+    // outer loop, so hole-only arcs are never fitted.
+    const used = stacked ? new Set<number>() : null
+    if (used)
+      bounds.regions.forEach((r, ri) => {
+        for (const ref of r.loops[outerLoop[ri]]) used.add(ref.arc)
+      })
     const arcCubics = bounds.arcs.map((a, i) =>
-      fitArc(a.points, cornersPerArc[i], a.closed, maxErrorPx),
+      used && !used.has(i) ? [] : fitArc(a.points, cornersPerArc[i], a.closed, maxErrorPx),
     )
     return bounds.regions.map((r, ri): RegionPath => {
-      const loops: Cubic[][] = r.loops.map((refs) => {
+      const keptLoops = stacked ? [r.loops[outerLoop[ri]]] : r.loops
+      const loops: Cubic[][] = keptLoops.map((refs) => {
         const cubics = refs.flatMap((ref) =>
           ref.reversed ? reverseCubics(arcCubics[ref.arc]) : arcCubics[ref.arc],
         )
         pointCount += cubics.length * 3 + 1
         return cubics
       })
-      return { paletteIndex: seg.regionColor[r.region], area: areas[ri], loops }
+      return {
+        paletteIndex: seg.regionColor[r.region],
+        area: areas[ri],
+        stackOrder: firstPixel[r.region],
+        loops,
+      }
     })
   })
   const svg = stage('svg', () =>
@@ -84,6 +109,7 @@ export function vectorize(
       transparentBg: options.transparentBg,
       optimize: options.optimize,
       colorOverrides: options.colorOverrides,
+      stackedShapes: options.stackedShapes,
     }),
   )
   const pathCount = (svg.match(/<path/g) ?? []).length

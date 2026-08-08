@@ -35,7 +35,7 @@ export function firstDirtyStage(
   if (prev.colorCount !== next.colorCount) return 'palette'
   if (prev.despeckleSize !== next.despeckleSize || prev.gapClosing !== next.gapClosing)
     return 'segment'
-  return 'fit' // smoothness, mergePaths, transparentBg, optimize, colorOverrides (or nothing) changed; fit+svg are cheap
+  return 'fit' // smoothness, mergePaths, transparentBg, optimize, colorOverrides, stackedShapes (or nothing) changed; fit+svg are cheap
 }
 
 interface Cache {
@@ -48,6 +48,7 @@ interface Cache {
   seg?: Segmentation
   bounds?: Boundaries
   areas?: number[] // per region: largest loop area (path ordering + background pick)
+  outerLoop?: number[] // per region: index of its largest (outer) loop
   corners?: number[][] // per arc: break indices
 }
 const cache: Cache = { image: null, options: null }
@@ -122,33 +123,56 @@ function run(
     cache.bounds = stage('boundaries', () => extractBoundaries(src, cache.seg!, cache.palette!))
     // Areas rank the paths and pick the background; they only depend on the raw
     // polylines, so they are computed once here rather than on every re-fit.
-    cache.areas = cache.bounds.regions.map((r) =>
-      Math.max(
-        ...r.loops.map((refs) => Math.abs(polygonArea(loopPointsOf(cache.bounds!.arcs, refs)))),
-      ),
+    const loopAreas = cache.bounds.regions.map((r) =>
+      r.loops.map((refs) => Math.abs(polygonArea(loopPointsOf(cache.bounds!.arcs, refs)))),
     )
+    cache.areas = loopAreas.map((la) => Math.max(...la))
+    cache.outerLoop = loopAreas.map((la) => la.indexOf(Math.max(...la)))
     cache.corners = stage('corners', () =>
       cache.bounds!.arcs.map((a) => (a.closed ? findCorners(a.points) : findOpenCorners(a.points))),
     )
   }
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
+  const stacked = options.stackedShapes
+  const firstPixel = new Int32Array(cache.seg!.regionCount).fill(-1)
+  if (stacked) {
+    let seen = 0
+    for (let i = 0; i < cache.seg!.labelMap.length && seen < cache.seg!.regionCount; i++) {
+      if (firstPixel[cache.seg!.labelMap[i]] === -1) {
+        firstPixel[cache.seg!.labelMap[i]] = i
+        seen++
+      }
+    }
+  }
   const paths = stage('fit', () => {
     // Each arc is fitted once, in its stored direction; the region that traverses it
     // backwards reuses the same cubics reversed exactly, so a shared boundary is the
-    // same curve on both sides by construction.
+    // same curve on both sides by construction. Stacked mode keeps only each region's
+    // outer loop, so hole-only arcs are never fitted.
+    const used = stacked ? new Set<number>() : null
+    if (used)
+      cache.bounds!.regions.forEach((r, ri) => {
+        for (const ref of r.loops[cache.outerLoop![ri]]) used.add(ref.arc)
+      })
     const arcCubics = cache.bounds!.arcs.map((a, i) =>
-      fitArc(a.points, cache.corners![i], a.closed, maxErrorPx),
+      used && !used.has(i) ? [] : fitArc(a.points, cache.corners![i], a.closed, maxErrorPx),
     )
     return cache.bounds!.regions.map((r, ri): RegionPath => {
-      const loops: Cubic[][] = r.loops.map((refs) => {
+      const keptLoops = stacked ? [r.loops[cache.outerLoop![ri]]] : r.loops
+      const loops: Cubic[][] = keptLoops.map((refs) => {
         const cubics = refs.flatMap((ref) =>
           ref.reversed ? reverseCubics(arcCubics[ref.arc]) : arcCubics[ref.arc],
         )
         pointCount += cubics.length * 3 + 1
         return cubics
       })
-      return { paletteIndex: cache.seg!.regionColor[r.region], area: cache.areas![ri], loops }
+      return {
+        paletteIndex: cache.seg!.regionColor[r.region],
+        area: cache.areas![ri],
+        stackOrder: firstPixel[r.region],
+        loops,
+      }
     })
   })
   const svg = stage('svg', () =>
@@ -157,6 +181,7 @@ function run(
       transparentBg: options.transparentBg,
       optimize: options.optimize,
       colorOverrides: options.colorOverrides,
+      stackedShapes: options.stackedShapes,
     }),
   )
   const pathCount = (svg.match(/<path/g) ?? []).length

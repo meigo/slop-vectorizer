@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { assembleSvg, polygonArea, type RegionPath } from '../src/worker/pipeline/svg'
 import type { Palette } from '../src/types'
+import type { Cubic } from '../src/worker/pipeline/fitcurves'
 
 describe('svg assembly', () => {
   const palette: Palette = { k: 2, colors: new Uint8ClampedArray([245, 245, 245, 200, 30, 30]) }
   const square: RegionPath = {
     paletteIndex: 1,
     area: 100,
+    stackOrder: 0,
     loops: [
       [
         [0, 0, 3, 0, 7, 0, 10, 0],
@@ -16,10 +18,27 @@ describe('svg assembly', () => {
       ],
     ],
   }
-  const bg: RegionPath = { paletteIndex: 0, area: 400, loops: [[[0, 0, 20, 0, 20, 0, 20, 20]]] }
+  const bg: RegionPath = {
+    paletteIndex: 0,
+    area: 400,
+    stackOrder: 0,
+    loops: [[[0, 0, 20, 0, 20, 0, 20, 20]]],
+  }
 
-  const V1 = { mergePaths: false, transparentBg: false, optimize: false, colorOverrides: null }
-  const OPT = { mergePaths: false, transparentBg: false, optimize: true, colorOverrides: null }
+  const V1 = {
+    mergePaths: false,
+    transparentBg: false,
+    optimize: false,
+    colorOverrides: null,
+    stackedShapes: false,
+  }
+  const OPT = {
+    mergePaths: false,
+    transparentBg: false,
+    optimize: true,
+    colorOverrides: null,
+    stackedShapes: false,
+  }
 
   it('emits one path per region, larger areas first, correct fills', () => {
     const svg = assembleSvg([square, bg], palette, 20, 20, V1)
@@ -46,7 +65,12 @@ describe('svg assembly', () => {
   })
 
   it('transparentBg drops all background-colored regions', () => {
-    const bgPocket: RegionPath = { paletteIndex: 0, area: 5, loops: [[[2, 2, 3, 2, 3, 2, 4, 2]]] }
+    const bgPocket: RegionPath = {
+      paletteIndex: 0,
+      area: 5,
+      stackOrder: 0,
+      loops: [[[2, 2, 3, 2, 3, 2, 4, 2]]],
+    }
     const svg = assembleSvg([square, bg, bgPocket], palette, 20, 20, { ...V1, transparentBg: true })
     expect(svg.match(/<path/g)!.length).toBe(1) // only the square survives
     expect(svg).not.toContain('#f5f5f5')
@@ -101,6 +125,7 @@ describe('svg assembly', () => {
       transparentBg: false,
       optimize: false,
       colorOverrides: [null, '#123456'],
+      stackedShapes: false,
     }
     const svg = assembleSvg([square, bg], palette, 20, 20, opts)
     expect(svg).toContain('fill="#123456"') // square (index 1) recolored
@@ -109,7 +134,13 @@ describe('svg assembly', () => {
   })
 
   it('colorOverrides changes only fills, never geometry', () => {
-    const base = { mergePaths: true, transparentBg: false, optimize: true, colorOverrides: null }
+    const base = {
+      mergePaths: true,
+      transparentBg: false,
+      optimize: true,
+      colorOverrides: null,
+      stackedShapes: false,
+    }
     const a = assembleSvg([square, bg], palette, 20, 20, base)
     const b = assembleSvg([square, bg], palette, 20, 20, {
       ...base,
@@ -120,9 +151,73 @@ describe('svg assembly', () => {
   })
 
   it('short or absent override arrays are no-ops', () => {
-    const base = { mergePaths: false, transparentBg: false, optimize: false, colorOverrides: null }
+    const base = {
+      mergePaths: false,
+      transparentBg: false,
+      optimize: false,
+      colorOverrides: null,
+      stackedShapes: false,
+    }
     const a = assembleSvg([square, bg], palette, 20, 20, base)
     const b = assembleSvg([square, bg], palette, 20, 20, { ...base, colorOverrides: [] })
     expect(b).toBe(a)
+  })
+})
+
+describe('assembleSvg stacked mode', () => {
+  const palette = { k: 2, colors: new Uint8ClampedArray([255, 255, 255, 0, 0, 0]) }
+  // one square loop as a Cubic[] (degenerate cubics along straight edges)
+  const square = (x0: number, y0: number, s: number): Cubic[] => {
+    const pts = [
+      [x0, y0],
+      [x0 + s, y0],
+      [x0 + s, y0 + s],
+      [x0, y0 + s],
+    ]
+    return pts.map((p, i) => {
+      const q = pts[(i + 1) % 4]
+      return [p[0], p[1], p[0], p[1], q[0], q[1], q[0], q[1]] as Cubic
+    })
+  }
+  const paths: RegionPath[] = [
+    { paletteIndex: 1, area: 25, loops: [square(30, 30, 5)], stackOrder: 950 },
+    { paletteIndex: 0, area: 100, loops: [square(0, 0, 10)], stackOrder: 0 },
+    { paletteIndex: 1, area: 16, loops: [square(10, 10, 4)], stackOrder: 310 },
+  ]
+  const opts = {
+    mergePaths: false,
+    transparentBg: false,
+    optimize: false,
+    colorOverrides: null,
+    stackedShapes: true,
+  }
+
+  it('paints in ascending stackOrder, not by area', () => {
+    const svg = assembleSvg(paths, palette, 40, 40, opts)
+    const fills = [...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1])
+    expect(fills).toEqual(['#ffffff', '#000000', '#000000'])
+    // area-descending would give the same first element but order 100,25,16 →
+    // discriminate via the d attributes: second path must be the stackOrder-310 square
+    const ds = [...svg.matchAll(/d="([^"]*)"/g)].map((m) => m[1])
+    expect(ds[1]).toContain('M10 10')
+    expect(ds[2]).toContain('M30 30')
+  })
+
+  it('ignores mergePaths and transparentBg and omits fill-rule', () => {
+    const base = assembleSvg(paths, palette, 40, 40, opts)
+    const noisy = assembleSvg(paths, palette, 40, 40, {
+      ...opts,
+      mergePaths: true,
+      transparentBg: true,
+    })
+    expect(noisy).toBe(base)
+    expect(base).not.toContain('fill-rule')
+  })
+
+  it('flat mode still emits fill-rule and area ordering', () => {
+    const svg = assembleSvg(paths, palette, 40, 40, { ...opts, stackedShapes: false })
+    expect(svg).toContain('fill-rule="evenodd"')
+    const ds = [...svg.matchAll(/d="([^"]*)"/g)].map((m) => m[1])
+    expect(ds[0]).toContain('M0 0') // largest area first
   })
 })

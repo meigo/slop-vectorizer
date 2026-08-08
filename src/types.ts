@@ -17,6 +17,7 @@ export interface PipelineOptions {
   saturation: number // 1 = unchanged
   gapClosing: number // 0–3 px, bridges dashed thin strokes
   colorOverrides: (string | null)[] | null // output recolor by palette index, '#rrggbb'; null = detected
+  stackedShapes: boolean // solid shapes painted in containment order, no holes
 }
 
 export const DEFAULT_OPTIONS: PipelineOptions = {
@@ -32,6 +33,7 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
   saturation: 1,
   gapClosing: 0,
   colorOverrides: null,
+  stackedShapes: false,
 }
 
 export interface Palette {

@@ -4,6 +4,7 @@ import type { Cubic } from './fitcurves'
 export interface RegionPath {
   paletteIndex: number
   area: number
+  stackOrder: number // row-major index of the region's first pixel; paint order in stacked mode
   loops: Cubic[][]
 }
 
@@ -81,6 +82,7 @@ export interface SvgOptions {
   transparentBg: boolean
   optimize: boolean
   colorOverrides: (string | null)[] | null
+  stackedShapes: boolean
 }
 
 export function assembleSvg(
@@ -90,6 +92,17 @@ export function assembleSvg(
   height: number,
   opts: SvgOptions,
 ): string {
+  if (opts.stackedShapes) {
+    const toPath = opts.optimize ? loopToPathCompact : loopToPath
+    const body = [...paths]
+      .sort((a, b) => a.stackOrder - b.stackOrder)
+      .map((p) => {
+        const fill = opts.colorOverrides?.[p.paletteIndex] ?? hex(palette.colors, p.paletteIndex)
+        return `<path fill="${fill}" d="${p.loops.map(toPath).join('')}"/>`
+      })
+      .join('\n  ')
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">\n  ${body}\n</svg>\n`
+  }
   let items: RegionPath[]
   if (opts.mergePaths) {
     const byColor = new Map<number, RegionPath>()
@@ -102,6 +115,7 @@ export function assembleSvg(
         byColor.set(p.paletteIndex, {
           paletteIndex: p.paletteIndex,
           area: p.area,
+          stackOrder: p.stackOrder,
           loops: [...p.loops],
         })
     }
