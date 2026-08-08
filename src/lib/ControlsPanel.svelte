@@ -8,6 +8,7 @@
     mode = $bindable(),
     stats,
     svg,
+    palette,
     notice,
     onchange,
     onupscale,
@@ -19,12 +20,30 @@
     mode: 'side' | 'split'
     stats: PipelineStats | null
     svg: string | null
+    palette: number[] | null
     notice: string | null
     onchange: () => void
     onupscale: () => void
     onfit: () => void
     onnew: () => void
   } = $props()
+
+  const rgbHex = (p: number[], i: number) =>
+    '#' +
+    [p[3 * i], p[3 * i + 1], p[3 * i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')
+  function setOverride(i: number, hexColor: string) {
+    const k = (palette?.length ?? 0) / 3
+    const arr = options.colorOverrides
+      ? [...options.colorOverrides]
+      : Array<string | null>(k).fill(null)
+    arr[i] = hexColor
+    options.colorOverrides = arr
+    onchange()
+  }
+  function clearOverrides() {
+    options.colorOverrides = null
+    onchange()
+  }
 
   function download() {
     if (!svg) return
@@ -80,6 +99,28 @@
         {/each}
       </select>
     </label>
+    {#if palette && palette.length >= 3}
+      <div class="swatches">
+        {#each { length: palette.length / 3 } as _, i}
+          {@const effective = options.colorOverrides?.[i] ?? rgbHex(palette, i)}
+          <label
+            class="swatch"
+            class:overridden={!!options.colorOverrides?.[i]}
+            title={effective}
+            style:background={effective}
+          >
+            <input
+              type="color"
+              value={effective}
+              oninput={(e) => setOverride(i, (e.target as HTMLInputElement).value)}
+            />
+          </label>
+        {/each}
+        {#if options.colorOverrides?.some(Boolean)}
+          <button class="reset-colors" onclick={clearOverrides}>reset colors</button>
+        {/if}
+      </div>
+    {/if}
     <label>
       Smoothness
       <input
@@ -243,6 +284,42 @@
   .row button.active {
     background: #4a90d9;
     color: white;
+  }
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+    align-items: center;
+  }
+  .swatch {
+    width: 22px;
+    height: 22px;
+    border: 1px solid #0003;
+    border-radius: 4px;
+    cursor: pointer;
+    position: relative;
+  }
+  .swatch.overridden::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border: 2px solid #4a90d9;
+    border-radius: 6px;
+  }
+  .swatch input {
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+  .reset-colors {
+    background: none;
+    border: none;
+    color: #4a90d9;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0;
   }
   .download {
     padding: 0.5rem;

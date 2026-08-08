@@ -25,6 +25,7 @@
   let notice = $state<string | null>(null)
   let options = $state({ ...DEFAULT_OPTIONS })
   let debounce: ReturnType<typeof setTimeout> | undefined
+  let lastPalette: number[] | null = null
 
   const stats = $derived(result?.stats ?? null)
   // Compare view shows the preprocessed bitmap (levels/blur/saturation applied) when
@@ -68,6 +69,20 @@
     void viewsH
     void twoColumn
     if (!viewport.touched && displayImage && viewsW > 0) fit()
+  })
+
+  // Overrides are index-aligned with the palette they were made for; when a new
+  // result arrives with a different palette, they're stale — drop them. (The one
+  // result computed with mismatched overrides renders once; the reset takes effect
+  // on the next re-run. Accepted transient per spec.)
+  $effect(() => {
+    const pal = result?.palette
+    if (!pal) return
+    const changed =
+      lastPalette !== null &&
+      (lastPalette.length !== pal.length || lastPalette.some((v, i) => v !== pal[i]))
+    if (changed && options.colorOverrides) options.colorOverrides = null
+    lastPalette = pal
   })
 
   async function decodeAndRun(file: Blob) {
@@ -152,6 +167,7 @@
         bind:mode
         {stats}
         svg={result?.svg ?? null}
+        palette={result?.palette ?? null}
         {notice}
         onchange={rerun}
         onupscale={handleUpscale}
