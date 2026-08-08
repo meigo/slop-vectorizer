@@ -8,6 +8,7 @@
   import { VectorizerClient } from './lib/workerClient'
   import { fileToRasterImage } from './lib/decode'
   import { DEFAULT_OPTIONS, type ClientResult, type RasterImage, type StageName } from './types'
+  import { remapOverrides } from './lib/paletteRemap'
 
   const client = new VectorizerClient()
   const viewport = new Viewport()
@@ -26,6 +27,8 @@
   let options = $state({ ...DEFAULT_OPTIONS })
   let debounce: ReturnType<typeof setTimeout> | undefined
   let lastPalette: number[] | null = null
+  let lastUpscale = 1
+  let pendingFramingScale: number | null = null
 
   const stats = $derived(result?.stats ?? null)
   // Compare view shows the preprocessed bitmap (levels/blur/saturation applied) when
@@ -54,13 +57,20 @@
     if (img) viewport.fitTo(paneW(), viewsH, img.width, img.height)
   }
   $effect(() => {
-    // fit on image-dimension change only, so pan/zoom survive slider drags
+    // fit on image-dimension change only, so pan/zoom survive slider drags —
+    // except an upscale re-decode with a deliberately framed view, which keeps
+    // its exact framing (zoom/factor, pan unchanged) instead of refitting
     const img = displayImage
     if (!img || viewsW === 0) return
     if (img.width === fittedW && img.height === fittedH) return
     fittedW = img.width
     fittedH = img.height
-    fit()
+    if (pendingFramingScale !== null) {
+      viewport.zoom = viewport.zoom / pendingFramingScale
+      pendingFramingScale = null
+    } else {
+      fit()
+    }
   })
   // Auto-refit on pane-geometry changes (window resize, mode/column flips) until
   // the user manually zooms/pans; Fit and new-image fits re-arm via fitTo().
@@ -71,31 +81,29 @@
     if (!viewport.touched && displayImage && viewsW > 0) fit()
   })
 
-  // Overrides are index-aligned with the palette they were made for; when a new
-  // result arrives with a genuinely different palette, they're stale — drop them
-  // and rerun so the mismatched-override render is bounded to one debounce cycle.
-  // "Different" is tolerance-based: re-estimation on resampled/adjusted pixels
-  // (upscale, mild pre-effects) wobbles colors by a few RGB units without changing
-  // what they are; overrides survive that (index alignment holds — the palette is
-  // luminance-sorted). Only a different k or a materially moved color resets.
-  const PALETTE_TOL_SQ = 20 * 20
-  function paletteDiffers(a: number[], b: number[]): boolean {
-    if (a.length !== b.length) return true
-    for (let i = 0; i < a.length; i += 3) {
-      const dr = a[i] - b[i]
-      const dg = a[i + 1] - b[i + 1]
-      const db = a[i + 2] - b[i + 2]
-      if (dr * dr + dg * dg + db * db > PALETTE_TOL_SQ) return true
-    }
-    return false
-  }
+  // Overrides are index-aligned with the palette they were made for. Re-estimation
+  // can wobble colors, reorder entries, or flip auto-k entirely (scale-sensitive:
+  // texture noise at 1x can split a cluster that upscaling re-merges), so when a
+  // new palette arrives, overrides MIGRATE by nearest-color match instead of
+  // resetting — an override drops only when its color has no near match. Rerun so
+  // any remapped render is bounded to one debounce cycle.
   $effect(() => {
     const pal = result?.palette
     if (!pal) return
-    const changed = lastPalette !== null && paletteDiffers(lastPalette, pal)
-    if (changed && options.colorOverrides) {
-      options.colorOverrides = null
-      rerun()
+    const exactSame =
+      lastPalette !== null &&
+      lastPalette.length === pal.length &&
+      lastPalette.every((v, i) => v === pal[i])
+    if (lastPalette && !exactSame && options.colorOverrides) {
+      const remapped = remapOverrides(lastPalette, pal, options.colorOverrides)
+      const unchanged =
+        remapped !== null &&
+        remapped.length === options.colorOverrides.length &&
+        remapped.every((v, i) => v === options.colorOverrides![i])
+      if (!unchanged) {
+        options.colorOverrides = remapped
+        rerun()
+      }
     }
     lastPalette = pal
   })
@@ -126,9 +134,15 @@
   }
 
   function handleUpscale() {
-    // Gap-closing max is 3 × upscale; clamp a now-out-of-range value down so it
-    // never silently exceeds the visible slider range after lowering upscale.
-    options.gapClosing = Math.min(options.gapClosing, 3 * upscale)
+    const factor = upscale / lastUpscale
+    lastUpscale = upscale
+    // Gap closing is in working-image pixels; rescale it with the image so the
+    // PHYSICAL bridge width is preserved (and round-trips: ×1 g=2 → ×2 g=4 → ×1
+    // g=2). A rescaled in-range value always stays within the new 3×upscale max.
+    options.gapClosing = Math.min(3 * upscale, Math.round(options.gapClosing * factor))
+    // Preserve the user's deliberate framing across the re-decode: dims scale by
+    // `factor`, so zoom/factor with unchanged pan reproduces the exact same view.
+    if (viewport.touched && image) pendingFramingScale = factor
     if (sourceFile) void decodeAndRun(sourceFile)
   }
 
@@ -191,6 +205,8 @@
           client.cancel()
           sourceFile = null
           upscale = 1
+          lastUpscale = 1
+          pendingFramingScale = null
           image = null
           result = null
           error = null
