@@ -47,10 +47,11 @@ describe('VectorizerClient concurrent vectorize() calls', () => {
       type: 'result',
       jobId: 2,
       result: { svg: '<svg/>', stats: { pathCount: 0, pointCount: 0, timings: {} } },
+      palette: [],
     }
     worker.onmessage?.({ data: result } as MessageEvent<WorkerResponse>)
 
-    await expect(p2).resolves.toEqual(result.result)
+    await expect(p2).resolves.toEqual({ ...result.result, palette: result.palette })
   })
 
   it('passes palette through to the resolved result', async () => {
