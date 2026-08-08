@@ -37,3 +37,7 @@ Overrides are only meaningful against the palette they were made for. App keeps 
 ## Out of scope
 
 Classification-palette editing (re-clustering to user colors), adding/removing/merging palette entries, per-region recoloring, palette import/export.
+
+## Addendum (v1.4.1): tolerance-based staleness
+
+Exact palette comparison reset overrides on any re-estimation wobble — notably an Upscale change (re-decode → resampled pixels → k-means lands ±few RGB units off), discarding still-valid overrides for the same artwork. Staleness now uses tolerance: overrides are KEPT when the new palette has the same length and every entry lies within Euclidean distance 20 (RGB units) of the previous entry at the same index (index alignment holds because the palette is luminance-sorted); they reset on different k or any entry moving beyond tolerance. Accepted trade-off: repeated small palette drifts can carry overrides beyond cumulative tolerance — benign direction (user-chosen colors persist; the reset link remains).
