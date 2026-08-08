@@ -7,7 +7,12 @@ export interface PreOptions {
   saturation: number
 }
 
-export const IDENTITY_PRE: PreOptions = { blackPoint: 0, whitePoint: 255, blurRadius: 0, saturation: 1 }
+export const IDENTITY_PRE: PreOptions = {
+  blackPoint: 0,
+  whitePoint: 255,
+  blurRadius: 0,
+  saturation: 1,
+}
 
 export function isIdentityPre(o: PreOptions): boolean {
   return o.blackPoint === 0 && o.whitePoint === 255 && o.blurRadius === 0 && o.saturation === 1
@@ -64,14 +69,16 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
   const sat = opts.saturation
   const out = new Uint8ClampedArray(working.length)
   for (let p = 0; p < working.length; p += 4) {
-    let r = working[p], g = working[p + 1], b = working[p + 2]
+    let r = working[p],
+      g = working[p + 1],
+      b = working[p + 2]
     if (sat !== 1) {
       const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
       r = lum + (r - lum) * sat
       g = lum + (g - lum) * sat
       b = lum + (b - lum) * sat
     }
-    out[p] = (r - black) * scale       // Uint8ClampedArray clamps + rounds
+    out[p] = (r - black) * scale // Uint8ClampedArray clamps + rounds
     out[p + 1] = (g - black) * scale
     out[p + 2] = (b - black) * scale
     out[p + 3] = 255

@@ -6,16 +6,16 @@ export interface RasterImage {
 
 export interface PipelineOptions {
   colorCount: number | 'auto' // 2..16 when numeric
-  smoothness: number          // 0..1; scales Bézier fit tolerance
-  despeckleSize: number       // regions smaller than this (px) get merged
-  mergePaths: boolean         // one <path> per palette color
-  transparentBg: boolean      // skip background-colored regions
-  optimize: boolean           // compact path serialization
-  blackPoint: number          // levels black point, 0..255
-  whitePoint: number          // levels white point, 0..255
-  blurRadius: number          // pre-blur box radius, px
-  saturation: number          // 1 = unchanged
-  gapClosing: number          // 0–3 px, bridges dashed thin strokes
+  smoothness: number // 0..1; scales Bézier fit tolerance
+  despeckleSize: number // regions smaller than this (px) get merged
+  mergePaths: boolean // one <path> per palette color
+  transparentBg: boolean // skip background-colored regions
+  optimize: boolean // compact path serialization
+  blackPoint: number // levels black point, 0..255
+  whitePoint: number // levels white point, 0..255
+  blurRadius: number // pre-blur box radius, px
+  saturation: number // 1 = unchanged
+  gapClosing: number // 0–3 px, bridges dashed thin strokes
 }
 
 export const DEFAULT_OPTIONS: PipelineOptions = {
@@ -38,9 +38,9 @@ export interface Palette {
 }
 
 export interface Segmentation {
-  labelMap: Int32Array    // width*height, pixel -> region id (0..regionCount-1)
+  labelMap: Int32Array // width*height, pixel -> region id (0..regionCount-1)
   regionColor: Int32Array // region id -> palette index
-  regionSize: Int32Array  // region id -> pixel count
+  regionSize: Int32Array // region id -> pixel count
   regionCount: number
 }
 
@@ -66,8 +66,12 @@ export interface VectorResult {
 export type ClientResult = VectorResult & { preImage?: RasterImage }
 
 // Worker protocol
-export type WorkerRequest =
-  | { type: 'vectorize'; image: RasterImage; options: PipelineOptions; jobId: number }
+export type WorkerRequest = {
+  type: 'vectorize'
+  image: RasterImage
+  options: PipelineOptions
+  jobId: number
+}
 
 export type WorkerResponse =
   | { type: 'progress'; jobId: number; stage: StageName }

@@ -24,7 +24,8 @@ describe('estimatePalette', () => {
   })
 
   it('is deterministic', () => {
-    const a = estimatePalette(img, 'auto'), b = estimatePalette(img, 'auto')
+    const a = estimatePalette(img, 'auto'),
+      b = estimatePalette(img, 'auto')
     expect([...a.colors]).toEqual([...b.colors])
   })
 })
@@ -47,7 +48,8 @@ describe('estimatePalette with thin strokes', () => {
   })
 
   it('is deterministic', () => {
-    const a = estimatePalette(ring, 'auto'), b = estimatePalette(ring, 'auto')
+    const a = estimatePalette(ring, 'auto'),
+      b = estimatePalette(ring, 'auto')
     expect([...a.colors]).toEqual([...b.colors])
   })
 
@@ -59,11 +61,12 @@ describe('estimatePalette with thin strokes', () => {
       for (let x = 0; x < 128; x++) {
         let cov = 0
         for (let sj = 0; sj < 8; sj++)
-          for (let si = 0; si < 8; si++)
-            if (stroke(x + (si + 0.5) / 8, y + (sj + 0.5) / 8)) cov++
-        const a = cov / 64, o = (y * 128 + x) * 4
+          for (let si = 0; si < 8; si++) if (stroke(x + (si + 0.5) / 8, y + (sj + 0.5) / 8)) cov++
+        const a = cov / 64,
+          o = (y * 128 + x) * 4
         if (a === 0) continue
-        for (let d = 0; d < 3; d++) img2.data[o + d] = [30, 30, 200][d] * a + img2.data[o + d] * (1 - a)
+        for (let d = 0; d < 3; d++)
+          img2.data[o + d] = [30, 30, 200][d] * a + img2.data[o + d] * (1 - a)
       }
     const pal = estimatePalette(img2, 3)
     expect(nearest(pal.colors, [30, 30, 200])).toBeLessThan(10)
@@ -76,10 +79,12 @@ describe('estimatePalette with thin strokes', () => {
     const pal = estimatePalette(two, 8)
     // every centroid must still be one of the two real colors, not an edge blend
     for (let i = 0; i < pal.colors.length; i += 3)
-      expect(Math.min(
-        Math.hypot(pal.colors[i] - 200, pal.colors[i + 1] - 30, pal.colors[i + 2] - 30),
-        Math.hypot(pal.colors[i] - 245, pal.colors[i + 1] - 245, pal.colors[i + 2] - 245),
-      )).toBeLessThan(10)
+      expect(
+        Math.min(
+          Math.hypot(pal.colors[i] - 200, pal.colors[i + 1] - 30, pal.colors[i + 2] - 30),
+          Math.hypot(pal.colors[i] - 245, pal.colors[i + 1] - 245, pal.colors[i + 2] - 245),
+        ),
+      ).toBeLessThan(10)
   })
 
   it('keeps a small accent region as its own palette entry', () => {
@@ -89,7 +94,9 @@ describe('estimatePalette with thin strokes', () => {
       for (let x = 0; x < 96; x++)
         if (dot(x + 0.5, y + 0.5)) {
           const o = (y * 96 + x) * 4
-          img2.data[o] = 30; img2.data[o + 1] = 30; img2.data[o + 2] = 200
+          img2.data[o] = 30
+          img2.data[o + 1] = 30
+          img2.data[o + 2] = 200
         }
     expect(estimatePalette(img2, 'auto').k).toBe(3)
     expect(nearest(estimatePalette(img2, 3).colors, [30, 30, 200])).toBeLessThan(10)

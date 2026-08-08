@@ -18,9 +18,12 @@ export function findCorners(loop: Float64Array): number[] {
     let minDev = Infinity
     for (const s of SCALES) {
       const step = Math.min(s, Math.floor((n - 1) / 2))
-      const ax = px(i) - px(i - step), ay = py(i) - py(i - step)
-      const bx = px(i + step) - px(i), by = py(i + step) - py(i)
-      const dot = ax * bx + ay * by, cross = ax * by - ay * bx
+      const ax = px(i) - px(i - step),
+        ay = py(i) - py(i - step)
+      const bx = px(i + step) - px(i),
+        by = py(i + step) - py(i)
+      const dot = ax * bx + ay * by,
+        cross = ax * by - ay * bx
       minDev = Math.min(minDev, Math.abs(Math.atan2(cross, dot)))
     }
     deviation[i] = minDev
@@ -33,8 +36,11 @@ export function findCorners(loop: Float64Array): number[] {
     let isMax = true
     for (let d = -win; d <= win; d++) {
       if (d === 0) continue
-      const j = ((i + d) % n + n) % n
-      if (deviation[j] > deviation[i] || (deviation[j] === deviation[i] && j < i)) { isMax = false; break }
+      const j = (((i + d) % n) + n) % n
+      if (deviation[j] > deviation[i] || (deviation[j] === deviation[i] && j < i)) {
+        isMax = false
+        break
+      }
     }
     if (isMax) corners.push(i)
   }

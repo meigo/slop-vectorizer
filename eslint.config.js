@@ -17,5 +17,5 @@ export default tseslint.config(
   {
     // Components stay covered by svelte-check (npm run check), matching slop-paint.
     ignores: ['dist/', '**/*.svelte', 'docs/', '.claude/', '.superpowers/'],
-  }
+  },
 )

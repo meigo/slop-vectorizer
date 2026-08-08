@@ -3,10 +3,15 @@ import type { RasterImage, Palette, Segmentation, RegionLoops } from '../../type
 // Directed boundary edges on the integer lattice, region kept on the LEFT while walking.
 // Vertex ids: v = y * (w+1) + x for lattice point (x, y).
 
-export function extractBoundaries(image: RasterImage, seg: Segmentation, palette: Palette): RegionLoops[] {
+export function extractBoundaries(
+  image: RasterImage,
+  seg: Segmentation,
+  palette: Palette,
+): RegionLoops[] {
   const { width: w, height: h } = image
   const { labelMap } = seg
-  const lab = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h) ? -1 : labelMap[y * w + x]
+  const lab = (x: number, y: number) =>
+    x < 0 || y < 0 || x >= w || y >= h ? -1 : labelMap[y * w + x]
 
   // --- Sub-pixel refinement, cached per undirected pixel-edge ---
   const refined = new Map<string, [number, number]>()
@@ -34,14 +39,18 @@ export function extractBoundaries(image: RasterImage, seg: Segmentation, palette
    * a's far border, so the formula is exact for arbitrary edge slope, not just 0/90 deg.
    */
   const refineEdge = (ax: number, ay: number, bx: number, by: number): [number, number] => {
-    const k = ax < bx || (ax === bx && ay < by) ? `${ax},${ay},${bx},${by}` : `${bx},${by},${ax},${ay}`
+    const k =
+      ax < bx || (ax === bx && ay < by) ? `${ax},${ay},${bx},${by}` : `${bx},${by},${ax},${ay}`
     const hit = refined.get(k)
     if (hit) return hit
-    const mx = (ax + bx + 1) / 2, my = (ay + by + 1) / 2 // midpoint of the two pixel centers
+    const mx = (ax + bx + 1) / 2,
+      my = (ay + by + 1) / 2 // midpoint of the two pixel centers
     let out: [number, number] = [mx, my]
-    const ra = lab(ax, ay), rb = lab(bx, by)
+    const ra = lab(ax, ay),
+      rb = lab(bx, by)
     if (ra >= 0 && rb >= 0) {
-      const ca = seg.regionColor[ra], cb = seg.regionColor[rb]
+      const ca = seg.regionColor[ra],
+        cb = seg.regionColor[rb]
       const fa = coverage(ax, ay, ca, cb) // fraction of A-color in pixel a
       const fb = coverage(bx, by, ca, cb) // fraction of A-color in pixel b
       const t = Math.max(-0.5, Math.min(1.5, fa + fb - 0.5))
@@ -57,26 +66,36 @@ export function extractBoundaries(image: RasterImage, seg: Segmentation, palette
   const addEdge = (region: number, x0: number, y0: number, x1: number, y1: number) => {
     if (region < 0) return
     let m = perRegion.get(region)
-    if (!m) { m = new Map(); perRegion.set(region, m) }
+    if (!m) {
+      m = new Map()
+      perRegion.set(region, m)
+    }
     const s = V(x0, y0)
     let ends = m.get(s)
-    if (!ends) { ends = []; m.set(s, ends) }
+    if (!ends) {
+      ends = []
+      m.set(s, ends)
+    }
     ends.push(V(x1, y1))
   }
   for (let y = 0; y <= h; y++) {
-    for (let x = 0; x < w; x++) { // horizontal edges (x,y)-(x+1,y): pixels (x,y-1) above, (x,y) below
-      const above = lab(x, y - 1), below = lab(x, y)
+    for (let x = 0; x < w; x++) {
+      // horizontal edges (x,y)-(x+1,y): pixels (x,y-1) above, (x,y) below
+      const above = lab(x, y - 1),
+        below = lab(x, y)
       if (above === below) continue
-      addEdge(above, x, y, x + 1, y)      // dir +x keeps 'above' on left
-      addEdge(below, x + 1, y, x, y)      // dir -x keeps 'below' on left
+      addEdge(above, x, y, x + 1, y) // dir +x keeps 'above' on left
+      addEdge(below, x + 1, y, x, y) // dir -x keeps 'below' on left
     }
   }
   for (let y = 0; y < h; y++) {
-    for (let x = 0; x <= w; x++) { // vertical edges (x,y)-(x,y+1): pixels (x-1,y) left, (x,y) right
-      const left = lab(x - 1, y), right = lab(x, y)
+    for (let x = 0; x <= w; x++) {
+      // vertical edges (x,y)-(x,y+1): pixels (x-1,y) left, (x,y) right
+      const left = lab(x - 1, y),
+        right = lab(x, y)
       if (left === right) continue
-      addEdge(right, x, y, x, y + 1)      // dir +y keeps 'right' pixel on left side of travel
-      addEdge(left, x, y + 1, x, y)       // dir -y keeps 'left' pixel on left side of travel
+      addEdge(right, x, y, x, y + 1) // dir +y keeps 'right' pixel on left side of travel
+      addEdge(left, x, y + 1, x, y) // dir -y keeps 'left' pixel on left side of travel
     }
   }
 
@@ -92,20 +111,28 @@ export function extractBoundaries(image: RasterImage, seg: Segmentation, palette
     for (const [start, ends] of edges) {
       while (ends.length > 0) {
         const verts: number[] = [start]
-        let prev = start, cur = ends.pop()!
+        let prev = start,
+          cur = ends.pop()!
         while (cur !== start) {
           verts.push(cur)
           const outs = edges.get(cur)
           if (!outs || outs.length === 0) throw new Error('boundaries: open chain (bug)')
           let pick = 0
-          if (outs.length > 1) { // junction: pick sharpest left turn relative to incoming direction
-            const dx = (cur % (w + 1)) - (prev % (w + 1)), dy = ((cur / (w + 1)) | 0) - ((prev / (w + 1)) | 0)
+          if (outs.length > 1) {
+            // junction: pick sharpest left turn relative to incoming direction
+            const dx = (cur % (w + 1)) - (prev % (w + 1)),
+              dy = ((cur / (w + 1)) | 0) - ((prev / (w + 1)) | 0)
             let bestScore = -Infinity
             outs.forEach((o, i) => {
-              const ox = (o % (w + 1)) - (cur % (w + 1)), oy = ((o / (w + 1)) | 0) - ((cur / (w + 1)) | 0)
-              const cross = dx * oy - dy * ox, dot = dx * ox + dy * oy
+              const ox = (o % (w + 1)) - (cur % (w + 1)),
+                oy = ((o / (w + 1)) | 0) - ((cur / (w + 1)) | 0)
+              const cross = dx * oy - dy * ox,
+                dot = dx * ox + dy * oy
               const score = cross > 0 ? 2 : dot > 0 ? 1 : cross < 0 ? 0 : -1 // left > straight > right > back
-              if (score > bestScore) { bestScore = score; pick = i }
+              if (score > bestScore) {
+                bestScore = score
+                pick = i
+              }
             })
           }
           prev = cur
@@ -114,17 +141,24 @@ export function extractBoundaries(image: RasterImage, seg: Segmentation, palette
         // Convert lattice-vertex loop -> refined midpoints of consecutive edges
         const pts: number[] = []
         for (let i = 0; i < verts.length; i++) {
-          const a = verts[i], b = verts[(i + 1) % verts.length]
-          const axv = a % (w + 1), ayv = (a / (w + 1)) | 0
-          const bxv = b % (w + 1), byv = (b / (w + 1)) | 0
+          const a = verts[i],
+            b = verts[(i + 1) % verts.length]
+          const axv = a % (w + 1),
+            ayv = (a / (w + 1)) | 0
+          const bxv = b % (w + 1),
+            byv = (b / (w + 1)) | 0
           // The two pixels flanking this lattice edge:
           let p: [number, number], q: [number, number]
-          if (ayv === byv) { // horizontal edge: pixels above/below
+          if (ayv === byv) {
+            // horizontal edge: pixels above/below
             const ex = Math.min(axv, bxv)
-            p = [ex, ayv - 1]; q = [ex, ayv]
-          } else {           // vertical edge: pixels left/right
+            p = [ex, ayv - 1]
+            q = [ex, ayv]
+          } else {
+            // vertical edge: pixels left/right
             const ey = Math.min(ayv, byv)
-            p = [axv - 1, ey]; q = [axv, ey]
+            p = [axv - 1, ey]
+            q = [axv, ey]
           }
           const inImg = (px: number, py: number) => px >= 0 && py >= 0 && px < w && py < h
           if (inImg(...p) && inImg(...q)) pts.push(...refineEdge(p[0], p[1], q[0], q[1]))

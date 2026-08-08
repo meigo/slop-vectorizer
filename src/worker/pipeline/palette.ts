@@ -20,12 +20,19 @@ function samplePixels(img: RasterImage, maxSamples: number): Float64Array {
     for (let x = 1; x < w - 1; x++) {
       const o = idx(x, y)
       let g = 0
-      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]] as const) {
+      for (const [nx, ny] of [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1],
+      ] as const) {
         const n = idx(nx, ny)
-        g = Math.max(g,
+        g = Math.max(
+          g,
           Math.abs(data[o] - data[n]),
           Math.abs(data[o + 1] - data[n + 1]),
-          Math.abs(data[o + 2] - data[n + 2]))
+          Math.abs(data[o + 2] - data[n + 2]),
+        )
       }
       if (g < 24) flat.push(data[o], data[o + 1], data[o + 2])
     }
@@ -61,8 +68,15 @@ function seedCenters(samples: Float64Array, k: number, rand: () => number): Floa
       d2[i] = Math.min(d2[i], dx * dx + dy * dy + dz * dz)
       sum += d2[i]
     }
-    let target = rand() * sum, pick = n - 1
-    for (let i = 0; i < n; i++) { target -= d2[i]; if (target <= 0) { pick = i; break } }
+    let target = rand() * sum,
+      pick = n - 1
+    for (let i = 0; i < n; i++) {
+      target -= d2[i]
+      if (target <= 0) {
+        pick = i
+        break
+      }
+    }
     centers.set(samples.subarray(pick * 3, pick * 3 + 3), c * 3)
   }
   return centers
@@ -72,25 +86,33 @@ function seedCenters(samples: Float64Array, k: number, rand: () => number): Floa
 function lloyd(samples: Float64Array, centers: Float64Array, k: number, iters: number) {
   const n = samples.length / 3
   const assign = new Int32Array(n)
-  let counts = new Int32Array(k), sse = 0
+  let counts = new Int32Array(k),
+    sse = 0
   for (let iter = 0; iter < iters; iter++) {
     sse = 0
     for (let i = 0; i < n; i++) {
-      let best = 0, bestD = Infinity
+      let best = 0,
+        bestD = Infinity
       for (let c = 0; c < k; c++) {
         const dx = samples[3 * i] - centers[3 * c]
         const dy = samples[3 * i + 1] - centers[3 * c + 1]
         const dz = samples[3 * i + 2] - centers[3 * c + 2]
         const d = dx * dx + dy * dy + dz * dz
-        if (d < bestD) { bestD = d; best = c }
+        if (d < bestD) {
+          bestD = d
+          best = c
+        }
       }
-      assign[i] = best; sse += bestD
+      assign[i] = best
+      sse += bestD
     }
     const sums = new Float64Array(k * 3)
     counts = new Int32Array(k)
     for (let i = 0; i < n; i++) {
       const c = assign[i]
-      sums[3 * c] += samples[3 * i]; sums[3 * c + 1] += samples[3 * i + 1]; sums[3 * c + 2] += samples[3 * i + 2]
+      sums[3 * c] += samples[3 * i]
+      sums[3 * c + 1] += samples[3 * i + 1]
+      sums[3 * c + 2] += samples[3 * i + 2]
       counts[c]++
     }
     for (let c = 0; c < k; c++)
@@ -103,15 +125,21 @@ function lloyd(samples: Float64Array, centers: Float64Array, k: number, iters: n
 /** Full-image pixel farthest in color from `alive` centers, plus that squared distance. */
 function farthestPixel(image: RasterImage, centers: Float64Array, alive: number[]) {
   const { data } = image
-  let bestD = -1, best = 0
+  let bestD = -1,
+    best = 0
   for (let o = 0; o < data.length; o += 4) {
     let d = Infinity
     for (const c of alive) {
-      const dx = data[o] - centers[3 * c], dy = data[o + 1] - centers[3 * c + 1], dz = data[o + 2] - centers[3 * c + 2]
+      const dx = data[o] - centers[3 * c],
+        dy = data[o + 1] - centers[3 * c + 1],
+        dz = data[o + 2] - centers[3 * c + 2]
       d = Math.min(d, dx * dx + dy * dy + dz * dz)
       if (d <= bestD) break
     }
-    if (d > bestD) { bestD = d; best = o }
+    if (d > bestD) {
+      bestD = d
+      best = o
+    }
   }
   return { color: [data[best], data[best + 1], data[best + 2]], dist2: bestD }
 }
@@ -123,8 +151,10 @@ function farthestPixel(image: RasterImage, centers: Float64Array, alive: number[
 function isBlend(color: number[], centers: Float64Array, alive: number[], tol = 8): boolean {
   for (let i = 0; i < alive.length; i++)
     for (let j = i + 1; j < alive.length; j++) {
-      const a = 3 * alive[i], b = 3 * alive[j]
-      let dot = 0, len2 = 0
+      const a = 3 * alive[i],
+        b = 3 * alive[j]
+      let dot = 0,
+        len2 = 0
       for (let d = 0; d < 3; d++) {
         const ab = centers[b + d] - centers[a + d]
         dot += (color[d] - centers[a + d]) * ab
@@ -132,27 +162,39 @@ function isBlend(color: number[], centers: Float64Array, alive: number[], tol = 
       }
       const t = len2 > 0 ? Math.max(0, Math.min(1, dot / len2)) : 0
       let d2 = 0
-      for (let d = 0; d < 3; d++) d2 += (color[d] - (centers[a + d] + t * (centers[b + d] - centers[a + d]))) ** 2
+      for (let d = 0; d < 3; d++)
+        d2 += (color[d] - (centers[a + d] + t * (centers[b + d] - centers[a + d]))) ** 2
       if (d2 < tol * tol) return true
     }
   return false
 }
 
 /** Full-image pixels within `radius` of `color`, strided down to at most `cap`. */
-function pixelsNear(image: RasterImage, color: number[], radius: number, cap = 20000): Float64Array {
-  const { data } = image, r2 = radius * radius
+function pixelsNear(
+  image: RasterImage,
+  color: number[],
+  radius: number,
+  cap = 20000,
+): Float64Array {
+  const { data } = image,
+    r2 = radius * radius
   const near = (o: number) => {
-    const dx = data[o] - color[0], dy = data[o + 1] - color[1], dz = data[o + 2] - color[2]
+    const dx = data[o] - color[0],
+      dy = data[o + 1] - color[1],
+      dz = data[o + 2] - color[2]
     return dx * dx + dy * dy + dz * dz <= r2
   }
   let count = 0
   for (let o = 0; o < data.length; o += 4) if (near(o)) count++
   const stride = Math.max(1, Math.ceil(count / cap))
   const out = new Float64Array(Math.ceil(count / stride) * 3)
-  let seen = 0, w = 0
+  let seen = 0,
+    w = 0
   for (let o = 0; o < data.length; o += 4)
     if (near(o) && seen++ % stride === 0) {
-      out[w++] = data[o]; out[w++] = data[o + 1]; out[w++] = data[o + 2]
+      out[w++] = data[o]
+      out[w++] = data[o + 1]
+      out[w++] = data[o + 2]
     }
   return out.subarray(0, w)
 }
@@ -169,10 +211,12 @@ function fitPalette(image: RasterImage, base: Float64Array, k: number, seed: num
   let samples = base
   let { counts, sse } = lloyd(samples, centers, k, 20)
   for (let pass = 0; pass < 4; pass++) {
-    const alive: number[] = [], dead: number[] = []
+    const alive: number[] = [],
+      dead: number[] = []
     for (let c = 0; c < k; c++) {
-      const dup = alive.some(a => {
-        const dx = centers[3 * a] - centers[3 * c], dy = centers[3 * a + 1] - centers[3 * c + 1]
+      const dup = alive.some((a) => {
+        const dx = centers[3 * a] - centers[3 * c],
+          dy = centers[3 * a + 1] - centers[3 * c + 1]
         const dz = centers[3 * a + 2] - centers[3 * c + 2]
         return dx * dx + dy * dy + dz * dz < DUP_DIST * DUP_DIST
       })
@@ -193,7 +237,10 @@ function fitPalette(image: RasterImage, base: Float64Array, k: number, seed: num
     const merged = new Float64Array(samples.length + added)
     merged.set(samples)
     let at = samples.length
-    for (const e of extra) { merged.set(e, at); at += e.length }
+    for (const e of extra) {
+      merged.set(e, at)
+      at += e.length
+    }
     samples = merged
     ;({ counts, sse } = lloyd(samples, centers, k, 10))
   }
@@ -204,11 +251,17 @@ export function estimatePalette(image: RasterImage, colorCount: number | 'auto')
   const base = samplePixels(image, 50000)
   const toPalette = (k: number, centers: Float64Array): Palette => {
     // Sort by luminance for stable ordering
-    const order = [...Array(k).keys()].sort((a, b) =>
-      (centers[3 * a] * 3 + centers[3 * a + 1] * 6 + centers[3 * a + 2]) -
-      (centers[3 * b] * 3 + centers[3 * b + 1] * 6 + centers[3 * b + 2]))
+    const order = [...Array(k).keys()].sort(
+      (a, b) =>
+        centers[3 * a] * 3 +
+        centers[3 * a + 1] * 6 +
+        centers[3 * a + 2] -
+        (centers[3 * b] * 3 + centers[3 * b + 1] * 6 + centers[3 * b + 2]),
+    )
     const colors = new Uint8ClampedArray(k * 3)
-    order.forEach((c, i) => colors.set([centers[3 * c], centers[3 * c + 1], centers[3 * c + 2]], i * 3))
+    order.forEach((c, i) =>
+      colors.set([centers[3 * c], centers[3 * c + 1], centers[3 * c + 2]], i * 3),
+    )
     return { k, colors }
   }
   if (colorCount !== 'auto') {

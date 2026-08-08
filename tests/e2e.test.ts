@@ -7,7 +7,7 @@ describe('vectorize round-trip', () => {
   it('circle on background -> 2 paths, sane stats, progress in order', () => {
     const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
     const stages: string[] = []
-    const { svg, stats } = vectorize(img, DEFAULT_OPTIONS, s => stages.push(s))
+    const { svg, stats } = vectorize(img, DEFAULT_OPTIONS, (s) => stages.push(s))
     expect(stats.pathCount).toBe(2)
     expect(svg).toContain('<path')
     expect(stages).toEqual(['palette', 'segment', 'boundaries', 'corners', 'fit', 'svg'])
@@ -16,14 +16,23 @@ describe('vectorize round-trip', () => {
   })
 
   it('two-shape three-color image -> 3 paths', () => {
-    const circle = insideCircle(30, 48, 20), square = insideRotSquare(66, 48, 14, 0.2)
-    const img = renderShape(96, 96, (x, y) => circle(x, y) || square(x, y), [200, 30, 30], [245, 245, 245])
+    const circle = insideCircle(30, 48, 20),
+      square = insideRotSquare(66, 48, 14, 0.2)
+    const img = renderShape(
+      96,
+      96,
+      (x, y) => circle(x, y) || square(x, y),
+      [200, 30, 30],
+      [245, 245, 245],
+    )
     // overpaint square area in blue for a 3rd color
     for (let y = 0; y < 96; y++)
       for (let x = 0; x < 96; x++)
         if (square(x + 0.5, y + 0.5)) {
           const o = (y * 96 + x) * 4
-          img.data[o] = 30; img.data[o + 1] = 30; img.data[o + 2] = 200
+          img.data[o] = 30
+          img.data[o + 1] = 30
+          img.data[o + 2] = 200
         }
     const { stats } = vectorize(img, DEFAULT_OPTIONS)
     expect(stats.pathCount).toBe(3)
@@ -61,7 +70,14 @@ describe('vectorize round-trip', () => {
 
   it('is byte-deterministic with all output options enabled', () => {
     const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
-    const opts = { ...DEFAULT_OPTIONS, mergePaths: true, transparentBg: true, optimize: true, gapClosing: 2, blackPoint: 15 }
+    const opts = {
+      ...DEFAULT_OPTIONS,
+      mergePaths: true,
+      transparentBg: true,
+      optimize: true,
+      gapClosing: 2,
+      blackPoint: 15,
+    }
     const a = vectorize(img, opts)
     const b = vectorize(img, opts)
     expect(a.svg).toBe(b.svg)
@@ -70,7 +86,7 @@ describe('vectorize round-trip', () => {
   it('non-identity pre runs first and appears in timings', () => {
     const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
     const stages: string[] = []
-    const { stats } = vectorize(img, { ...DEFAULT_OPTIONS, blackPoint: 20 }, s => stages.push(s))
+    const { stats } = vectorize(img, { ...DEFAULT_OPTIONS, blackPoint: 20 }, (s) => stages.push(s))
     expect(stages[0]).toBe('pre')
     expect(stats.timings.pre).toBeGreaterThanOrEqual(0)
     expect(stats.pathCount).toBe(2) // mild levels don't change the circle result
@@ -79,7 +95,7 @@ describe('vectorize round-trip', () => {
   it('identity pre is skipped entirely', () => {
     const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
     const stages: string[] = []
-    const { stats } = vectorize(img, DEFAULT_OPTIONS, s => stages.push(s))
+    const { stats } = vectorize(img, DEFAULT_OPTIONS, (s) => stages.push(s))
     expect(stages).not.toContain('pre')
     expect(stats.timings.pre).toBeUndefined()
   })

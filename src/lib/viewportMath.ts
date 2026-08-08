@@ -4,12 +4,7 @@ export interface FitResult {
   panY: number
 }
 
-export function computeFit(
-  cw: number,
-  ch: number,
-  iw: number,
-  ih: number
-): FitResult {
+export function computeFit(cw: number, ch: number, iw: number, ih: number): FitResult {
   const zoom = Math.min(1, cw / iw, ch / ih)
   return {
     zoom,

@@ -1,4 +1,10 @@
-import type { RasterImage, PipelineOptions, StageName, VectorResult, PipelineStats } from '../../types'
+import type {
+  RasterImage,
+  PipelineOptions,
+  StageName,
+  VectorResult,
+  PipelineStats,
+} from '../../types'
 import { preprocess, isIdentityPre, type PreOptions } from './preprocess'
 import { estimatePalette } from './palette'
 import { segmentImage } from './segment'
@@ -21,15 +27,20 @@ export function vectorize(
     return r
   }
   const preOpts: PreOptions = {
-    blackPoint: options.blackPoint, whitePoint: options.whitePoint,
-    blurRadius: options.blurRadius, saturation: options.saturation,
+    blackPoint: options.blackPoint,
+    whitePoint: options.whitePoint,
+    blurRadius: options.blurRadius,
+    saturation: options.saturation,
   }
   const src = isIdentityPre(preOpts) ? image : stage('pre', () => preprocess(image, preOpts))
   const palette = stage('palette', () => estimatePalette(src, options.colorCount))
-  const seg = stage('segment', () => segmentImage(src, palette, options.despeckleSize, options.gapClosing))
+  const seg = stage('segment', () =>
+    segmentImage(src, palette, options.despeckleSize, options.gapClosing),
+  )
   const bounds = stage('boundaries', () => extractBoundaries(src, seg, palette))
   const cornersPerLoop = stage('corners', () =>
-    bounds.map(r => r.loops.map(l => findCorners(l))))
+    bounds.map((r) => r.loops.map((l) => findCorners(l))),
+  )
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
   const paths = stage('fit', () =>
@@ -39,15 +50,17 @@ export function vectorize(
         pointCount += cubics.length * 3 + 1
         return cubics
       })
-      const area = Math.max(...r.loops.map(l => Math.abs(polygonArea(l))))
+      const area = Math.max(...r.loops.map((l) => Math.abs(polygonArea(l))))
       return { paletteIndex: seg.regionColor[r.region], area, loops }
-    }))
+    }),
+  )
   const svg = stage('svg', () =>
     assembleSvg(paths, palette, image.width, image.height, {
       mergePaths: options.mergePaths,
       transparentBg: options.transparentBg,
       optimize: options.optimize,
-    }))
+    }),
+  )
   const pathCount = (svg.match(/<path/g) ?? []).length
   return { svg, stats: { pathCount, pointCount, timings } }
 }

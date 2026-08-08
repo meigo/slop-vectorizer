@@ -2,10 +2,18 @@ import type { RasterImage } from '../types'
 
 const MAX_SIDE = 4096
 
-export interface DecodeResult { image: RasterImage; downscaled: boolean }
+export interface DecodeResult {
+  image: RasterImage
+  downscaled: boolean
+}
 
-export function scaledDims(w: number, h: number, upscale: number): { w: number; h: number; downscaled: boolean } {
-  const tw = w * upscale, th = h * upscale
+export function scaledDims(
+  w: number,
+  h: number,
+  upscale: number,
+): { w: number; h: number; downscaled: boolean } {
+  const tw = w * upscale,
+    th = h * upscale
   const clamp = Math.min(1, MAX_SIDE / Math.max(tw, th))
   return {
     w: Math.max(1, Math.round(tw * clamp)),

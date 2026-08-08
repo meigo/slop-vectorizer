@@ -41,7 +41,7 @@ describe('VectorizerClient concurrent vectorize() calls', () => {
 
     expect(instances).toHaveLength(1) // vectorize() must not respawn the worker
     const worker = instances[0]
-    expect(worker.posted.map(m => m.type === 'vectorize' && m.jobId)).toEqual([1, 2])
+    expect(worker.posted.map((m) => m.type === 'vectorize' && m.jobId)).toEqual([1, 2])
 
     const result: WorkerResponse = {
       type: 'result',

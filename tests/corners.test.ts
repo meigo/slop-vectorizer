@@ -10,7 +10,7 @@ function shapeLoop(inside: (x: number, y: number) => boolean): Float64Array {
   const pal = estimatePalette(img, 2)
   const seg = segmentImage(img, pal, 4)
   const all = extractBoundaries(img, seg, pal)
-  const shape = all.find(r => seg.regionSize[r.region] < 96 * 96 / 2)!
+  const shape = all.find((r) => seg.regionSize[r.region] < (96 * 96) / 2)!
   return shape.loops[0]
 }
 

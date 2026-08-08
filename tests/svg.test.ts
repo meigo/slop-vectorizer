@@ -5,11 +5,16 @@ import type { Palette } from '../src/types'
 describe('svg assembly', () => {
   const palette: Palette = { k: 2, colors: new Uint8ClampedArray([245, 245, 245, 200, 30, 30]) }
   const square: RegionPath = {
-    paletteIndex: 1, area: 100,
-    loops: [[
-      [0, 0, 3, 0, 7, 0, 10, 0], [10, 0, 10, 3, 10, 7, 10, 10],
-      [10, 10, 7, 10, 3, 10, 0, 10], [0, 10, 0, 7, 0, 3, 0, 0],
-    ]],
+    paletteIndex: 1,
+    area: 100,
+    loops: [
+      [
+        [0, 0, 3, 0, 7, 0, 10, 0],
+        [10, 0, 10, 3, 10, 7, 10, 10],
+        [10, 10, 7, 10, 3, 10, 0, 10],
+        [0, 10, 0, 7, 0, 3, 0, 0],
+      ],
+    ],
   }
   const bg: RegionPath = { paletteIndex: 0, area: 400, loops: [[[0, 0, 20, 0, 20, 0, 20, 20]]] }
 
@@ -36,7 +41,7 @@ describe('svg assembly', () => {
     const svg = assembleSvg([square, bg, square2], palette, 20, 20, { ...V1, mergePaths: true })
     expect(svg.match(/<path/g)!.length).toBe(2) // 2 colors, not 3 regions
     // both square regions' subpaths live in the red path's d
-    const red = svg.split('\n').find(l => l.includes('#c81e1e'))!
+    const red = svg.split('\n').find((l) => l.includes('#c81e1e'))!
     expect(red.match(/M/g)!.length).toBe(2)
   })
 
@@ -64,7 +69,8 @@ describe('svg assembly', () => {
       for (const c of cs) {
         const n = nums(c)
         abs.push(cx + n[0], cy + n[1], cx + n[2], cy + n[3], cx + n[4], cy + n[5])
-        cx += n[4]; cy += n[5]
+        cx += n[4]
+        cy += n[5]
       }
     }
     return abs
@@ -85,7 +91,7 @@ describe('svg assembly', () => {
     const absSvg = assembleSvg([square, bg], palette, 20, 20, { ...OPT, optimize: false })
     const optSvg = assembleSvg([square, bg], palette, 20, 20, OPT)
     expect(optSvg.length).toBeLessThan(absSvg.length)
-    expect(optSvg).not.toMatch(/ -/)   // no space before negatives
+    expect(optSvg).not.toMatch(/ -/) // no space before negatives
     expect(optSvg).not.toMatch(/\d+\.\d*0[" cz]/) // no trailing zeros
   })
 })

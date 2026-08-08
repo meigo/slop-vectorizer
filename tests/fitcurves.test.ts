@@ -44,8 +44,14 @@ describe('fitLoop', () => {
     for (let s = 0; s < 4; s++)
       for (let i = 0; i < 25; i++) {
         const t = i / 25
-        const corners4 = [[0, 0], [100, 0], [100, 100], [0, 100]]
-        const [x0, y0] = corners4[s], [x1, y1] = corners4[(s + 1) % 4]
+        const corners4 = [
+          [0, 0],
+          [100, 0],
+          [100, 100],
+          [0, 100],
+        ]
+        const [x0, y0] = corners4[s],
+          [x1, y1] = corners4[(s + 1) % 4]
         sq.push(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
       }
     const cubics = fitLoop(new Float64Array(sq), [0, 25, 50, 75], 0.5)

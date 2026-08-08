@@ -18,8 +18,8 @@ describe('preprocess', () => {
   it('levels: endpoints and midpoint map exactly', () => {
     const img = flat(2, 1, [50, 125, 200])
     const out = preprocess(img, { ...IDENTITY_PRE, blackPoint: 50, whitePoint: 200 })
-    expect(out.data[0]).toBe(0)     // 50 -> black
-    expect(out.data[2]).toBe(255)   // 200 -> white
+    expect(out.data[0]).toBe(0) // 50 -> black
+    expect(out.data[2]).toBe(255) // 200 -> white
     expect(Math.abs(out.data[1] - 128)).toBeLessThanOrEqual(1) // 125 -> mid
   })
 
@@ -32,16 +32,25 @@ describe('preprocess', () => {
   })
 
   it('blur preserves mean (±1) and reduces variance on noise', () => {
-    const w = 64, h = 64
+    const w = 64,
+      h = 64
     const img = flat(w, h, [128, 128, 128])
     const rand = mulberry32(42)
     for (let p = 0; p < img.data.length; p += 4) {
       const v = 128 + (rand() - 0.5) * 100
-      img.data[p] = v; img.data[p + 1] = v; img.data[p + 2] = v
+      img.data[p] = v
+      img.data[p + 1] = v
+      img.data[p + 2] = v
     }
     const stats = (d: Uint8ClampedArray) => {
-      let sum = 0, sq = 0, n = 0
-      for (let p = 0; p < d.length; p += 4) { sum += d[p]; sq += d[p] * d[p]; n++ }
+      let sum = 0,
+        sq = 0,
+        n = 0
+      for (let p = 0; p < d.length; p += 4) {
+        sum += d[p]
+        sq += d[p] * d[p]
+        n++
+      }
       const mean = sum / n
       return { mean, variance: sq / n - mean * mean }
     }
@@ -53,7 +62,11 @@ describe('preprocess', () => {
   })
 
   it('whitePoint <= blackPoint is guarded (no division blowup)', () => {
-    const out = preprocess(flat(2, 1, [100, 100, 100]), { ...IDENTITY_PRE, blackPoint: 200, whitePoint: 100 })
+    const out = preprocess(flat(2, 1, [100, 100, 100]), {
+      ...IDENTITY_PRE,
+      blackPoint: 200,
+      whitePoint: 100,
+    })
     for (let p = 0; p < out.data.length; p += 4) expect(Number.isFinite(out.data[p])).toBe(true)
   })
 })
