@@ -17,6 +17,10 @@ export function vectorize(
   image: RasterImage,
   options: PipelineOptions,
   onProgress?: (stage: StageName) => void,
+  // Scale-invariant palette source (e.g. the original ×1 decode of an upscaled
+  // working image); when given, palette estimation reads it — with the same
+  // pre-effects applied — instead of the working image.
+  paletteImage?: RasterImage,
 ): VectorResult {
   const timings: PipelineStats['timings'] = {}
   const stage = <T>(name: StageName, fn: () => T): T => {
@@ -32,8 +36,16 @@ export function vectorize(
     blurRadius: options.blurRadius,
     saturation: options.saturation,
   }
-  const src = isIdentityPre(preOpts) ? image : stage('pre', () => preprocess(image, preOpts))
-  const palette = stage('palette', () => estimatePalette(src, options.colorCount))
+  const identity = isIdentityPre(preOpts)
+  const src = identity ? image : stage('pre', () => preprocess(image, preOpts))
+  const palette = stage('palette', () => {
+    const palInput = paletteImage
+      ? identity
+        ? paletteImage
+        : preprocess(paletteImage, preOpts)
+      : src
+    return estimatePalette(palInput, options.colorCount)
+  })
   const seg = stage('segment', () =>
     segmentImage(src, palette, options.despeckleSize, options.gapClosing),
   )

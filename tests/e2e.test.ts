@@ -111,4 +111,53 @@ describe('vectorize round-trip', () => {
     const paths = (s: string) => [...s.matchAll(/d="([^"]*)"/g)].map((m) => m[1])
     expect(paths(a.svg)).toEqual(paths(plain.svg))
   })
+
+  it('paletteImage keeps output colors constant across scales', () => {
+    // Three-tone artwork whose mid-gray cluster drifts when the palette is
+    // re-estimated on resampled pixels; with the ×1 image as palette source,
+    // an upscaled run must emit exactly the fills of the ×1 run.
+    const base = renderShape(
+      120,
+      80,
+      (x, y) => (y > 20 && y < 28) || (y > 40 && y < 44),
+      [30, 30, 30],
+      [245, 245, 245],
+    )
+    // add a gray patch
+    for (let y = 55; y < 75; y++)
+      for (let x = 20; x < 80; x++) {
+        const o = (y * 120 + x) * 4
+        base.data[o] = 110
+        base.data[o + 1] = 110
+        base.data[o + 2] = 110
+      }
+    // bilinear ×2 (approximates the decode-time upscale)
+    const w = 240
+    const h = 160
+    const up = new Uint8ClampedArray(w * h * 4)
+    const src = (x: number, y: number, c: number) =>
+      base.data[(Math.min(79, Math.max(0, y)) * 120 + Math.min(119, Math.max(0, x))) * 4 + c]
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const fx = (x + 0.5) / 2 - 0.5
+        const fy = (y + 0.5) / 2 - 0.5
+        const x0 = Math.floor(fx)
+        const y0 = Math.floor(fy)
+        const tx = fx - x0
+        const ty = fy - y0
+        for (let c = 0; c < 3; c++)
+          up[(y * w + x) * 4 + c] =
+            src(x0, y0, c) * (1 - tx) * (1 - ty) +
+            src(x0 + 1, y0, c) * tx * (1 - ty) +
+            src(x0, y0 + 1, c) * (1 - tx) * ty +
+            src(x0 + 1, y0 + 1, c) * tx * ty
+        up[(y * w + x) * 4 + 3] = 255
+      }
+    const upImg = { width: w, height: h, data: up }
+    const opts = { ...DEFAULT_OPTIONS, colorCount: 3 }
+    const fills = (s: string) => [...s.matchAll(/fill="([^"]+)"/g)].map((m) => m[1]).sort()
+    const at1x = vectorize(base, opts)
+    const at2x = vectorize(upImg, opts, undefined, base)
+    expect(fills(at2x.svg)).toEqual(fills(at1x.svg))
+  })
 })

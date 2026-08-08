@@ -73,6 +73,10 @@ export type WorkerRequest = {
   image: RasterImage
   options: PipelineOptions
   jobId: number
+  // Scale-invariant palette source (the original ×1 decode). Sent only when the
+  // source file changes — the worker caches it; palette estimation reads it so
+  // swatch colors stay constant across upscale changes.
+  paletteImage?: RasterImage
 }
 
 export type WorkerResponse =

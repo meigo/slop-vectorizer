@@ -42,6 +42,8 @@ interface Cache {
   image: RasterImage | null
   options: PipelineOptions | null
   pre?: RasterImage
+  palImage?: RasterImage // scale-invariant palette source (original ×1 decode)
+  palPre?: RasterImage // palette source with current pre-effects applied
   palette?: Palette
   seg?: Segmentation
   bounds?: RegionLoops[]
@@ -54,13 +56,18 @@ function run(
   options: PipelineOptions,
   post: (m: WorkerResponse) => void,
   jobId: number,
+  paletteImage?: RasterImage,
 ) {
-  const from = firstDirtyStage(
-    cache.options,
-    options,
-    cache.image === image || sameImageData(cache.image, image),
-  )
+  const prev = cache.options
+  const sameImg = cache.image === image || sameImageData(cache.image, image)
+  const from = firstDirtyStage(prev, options, sameImg)
   const fromIdx = ORDER.indexOf(from)
+  const palSrcChanged =
+    paletteImage !== undefined && !sameImageData(cache.palImage ?? null, paletteImage)
+  if (palSrcChanged) {
+    cache.palImage = paletteImage
+    cache.palPre = undefined
+  }
   const timings: PipelineStats['timings'] = {}
   const stage = <T>(name: StageName, fn: () => T): T => {
     post({ type: 'progress', jobId, stage: name })
@@ -76,11 +83,36 @@ function run(
     saturation: options.saturation,
   }
   const identity = isIdentityPre(preOpts)
+  const preFieldsChanged =
+    !prev ||
+    prev.blackPoint !== options.blackPoint ||
+    prev.whitePoint !== options.whitePoint ||
+    prev.blurRadius !== options.blurRadius ||
+    prev.saturation !== options.saturation
+  if (preFieldsChanged) cache.palPre = undefined
   if (fromIdx <= ORDER.indexOf('pre') || !cache.pre)
     cache.pre = identity ? image : stage('pre', () => preprocess(image, preOpts))
   const src = cache.pre
-  if (fromIdx <= ORDER.indexOf('palette') || !cache.palette)
-    cache.palette = stage('palette', () => estimatePalette(src, options.colorCount))
+  // The palette comes from the scale-invariant source when one is cached, so a
+  // working-image change alone (upscale re-decode) does NOT re-estimate — swatch
+  // colors stay constant across scale changes by construction.
+  const paletteDirty =
+    !cache.palette ||
+    palSrcChanged ||
+    preFieldsChanged ||
+    !prev ||
+    prev.colorCount !== options.colorCount ||
+    (!cache.palImage && !sameImg)
+  if (paletteDirty)
+    cache.palette = stage('palette', () => {
+      const palBase = cache.palImage
+      const palInput = palBase
+        ? identity
+          ? palBase
+          : (cache.palPre ??= preprocess(palBase, preOpts))
+        : src
+      return estimatePalette(palInput, options.colorCount)
+    })
   if (fromIdx <= ORDER.indexOf('segment') || !cache.seg)
     cache.seg = stage('segment', () =>
       segmentImage(src, cache.palette!, options.despeckleSize, options.gapClosing),
@@ -135,7 +167,7 @@ export function sameImageData(a: RasterImage | null, b: RasterImage): boolean {
 
 if (typeof self !== 'undefined' && 'postMessage' in self && typeof document === 'undefined') {
   self.onmessage = (e: MessageEvent<WorkerRequest>) => {
-    const { image, options, jobId } = e.data
+    const { image, options, jobId, paletteImage } = e.data
     let currentStage: StageName | 'unknown' = 'unknown'
     try {
       run(
@@ -146,6 +178,7 @@ if (typeof self !== 'undefined' && 'postMessage' in self && typeof document === 
           self.postMessage(m)
         },
         jobId,
+        paletteImage,
       )
     } catch (err) {
       cache.image = null

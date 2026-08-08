@@ -23,6 +23,8 @@ export class VectorizerClient {
     image: RasterImage,
     options: PipelineOptions,
     onProgress?: (stage: StageName) => void,
+    // Send only when the source file changes — the worker caches it (it's large).
+    paletteImage?: RasterImage,
   ): Promise<ClientResult> {
     this.pending?.reject(new Error('cancelled')) // a new call supersedes any unsettled job
     const jobId = ++this.jobId
@@ -44,7 +46,13 @@ export class VectorizerClient {
         this.pending = null
         reject(new Error(e.message))
       }
-      this.worker.postMessage({ type: 'vectorize', image, options, jobId })
+      this.worker.postMessage({
+        type: 'vectorize',
+        image,
+        options,
+        jobId,
+        ...(paletteImage ? { paletteImage } : {}),
+      })
     })
   }
 

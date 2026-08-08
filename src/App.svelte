@@ -29,6 +29,11 @@
   let lastPalette: number[] | null = null
   let lastUpscale = 1
   let preserveNextFraming = false
+  // Original ×1 decode of the current file: the scale-invariant palette source.
+  // Palette estimation always reads this, so swatch colors stay constant across
+  // upscale changes (re-estimating on resampled pixels drifts mid-gray clusters
+  // and can flip auto-k). Plain let — it's a large buffer, no reactivity needed.
+  let baseImage: RasterImage | null = null
 
   const stats = $derived(result?.stats ?? null)
   // Compare view shows the preprocessed bitmap (levels/blur/saturation applied) when
@@ -121,7 +126,13 @@
       const { image: img, downscaled } = await fileToRasterImage(file, upscale)
       if (downscaled) notice = 'Large image was downscaled to 4096px'
       image = img
-      result = await client.vectorize(img, $state.snapshot(options), (s) => (stage = s))
+      if (upscale === 1) baseImage = img // ×1 decode = the palette source
+      result = await client.vectorize(
+        img,
+        $state.snapshot(options),
+        (s) => (stage = s),
+        baseImage ?? undefined,
+      )
       stage = null
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -211,6 +222,7 @@
           upscale = 1
           lastUpscale = 1
           preserveNextFraming = false
+          baseImage = null
           image = null
           result = null
           error = null
