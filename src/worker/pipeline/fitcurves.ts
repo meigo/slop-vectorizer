@@ -148,6 +148,44 @@ function fitCubic(pts: V[], tHat1: V, tHat2: V, errSq: number, out: Cubic[]): vo
   fitCubic(pts.slice(split), scale(centerTangent, -1), tHat2, errSq, out)
 }
 
+/**
+ * Reverse a fitted chain exactly: each cubic's endpoints and control points swap,
+ * then the list order flips. Bit-for-bit — no arithmetic — so the two regions
+ * sharing an arc emit the same curve and cannot leave a crack between them.
+ */
+export function reverseCubics(cubics: Cubic[]): Cubic[] {
+  return cubics.map((c): Cubic => [c[6], c[7], c[4], c[5], c[2], c[3], c[0], c[1]]).reverse()
+}
+
+/**
+ * Fit one boundary arc once, in its stored direction. Open arcs break at
+ * [start, ...interior corners, end] with one-sided tangents: the junction
+ * endpoints are corner-like by design (three or more regions meet there), and
+ * fitting to them pins the arc's ends exactly on the shared junction vertices.
+ */
+export function fitArc(
+  points: Float64Array,
+  corners: number[],
+  closed: boolean,
+  maxErrorPx: number,
+): Cubic[] {
+  if (closed) return fitLoop(points, corners, maxErrorPx)
+  const n = points.length / 2
+  const p = (i: number): V => ({ x: points[2 * i], y: points[2 * i + 1] })
+  const breaks = [0, ...corners.filter((c) => c > 0 && c < n - 1), n - 1]
+  const errSq = maxErrorPx * maxErrorPx
+  const out: Cubic[] = []
+  for (let b = 0; b + 1 < breaks.length; b++) {
+    const seg: V[] = []
+    for (let i = breaks[b]; i <= breaks[b + 1]; i++) seg.push(p(i))
+    if (seg.length < 2) continue
+    const tHat1 = normalize(sub(seg[1], seg[0]))
+    const tHat2 = normalize(sub(seg[seg.length - 2], seg[seg.length - 1]))
+    fitCubic(seg, tHat1, tHat2, errSq, out)
+  }
+  return out
+}
+
 /** Fit a closed loop. corners: ascending vertex indices to break at (may be empty). */
 export function fitLoop(loop: Float64Array, corners: number[], maxErrorPx: number): Cubic[] {
   const n = loop.length / 2

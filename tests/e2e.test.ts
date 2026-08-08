@@ -68,6 +68,74 @@ describe('vectorize round-trip', () => {
     expect(svg.match(/M/g)!.length).toBe(5)
   })
 
+  it('shared boundaries are fitted once: neighbours emit bit-identical reversed cubics', () => {
+    // Disc whose right half is overpainted blue: the two half-discs share a straight
+    // chord, and each shares a curved semicircular arc with the background. Fitted
+    // per-region, those curved arcs would land on different control points from each
+    // side (different traversal start and direction) and leave hairline cracks.
+    const disc = insideCircle(48, 48, 30)
+    const img = renderShape(96, 96, disc, [200, 30, 30], [245, 245, 245])
+    for (let y = 0; y < 96; y++)
+      for (let x = 48; x < 96; x++)
+        if (disc(x + 0.5, y + 0.5)) {
+          const o = (y * 96 + x) * 4
+          img.data[o] = 30
+          img.data[o + 1] = 30
+          img.data[o + 2] = 200
+        }
+    const { svg } = vectorize(img, {
+      ...DEFAULT_OPTIONS,
+      colorCount: 3,
+      mergePaths: false,
+      optimize: false,
+    })
+    const cubics: number[][] = []
+    for (const m of svg.matchAll(/d="([^"]*)"/g))
+      for (const sub of m[1].split('M').slice(1)) {
+        const nums = sub
+          .split(/[CZ\s]+/)
+          .filter((s) => s.length > 0)
+          .map(Number)
+        let cx = nums[0],
+          cy = nums[1]
+        for (let i = 2; i + 5 < nums.length; i += 6) {
+          cubics.push([
+            cx,
+            cy,
+            nums[i],
+            nums[i + 1],
+            nums[i + 2],
+            nums[i + 3],
+            nums[i + 4],
+            nums[i + 5],
+          ])
+          cx = nums[i + 4]
+          cy = nums[i + 5]
+        }
+      }
+    // Orientation-independent key: a shared cubic is traversed in opposite directions
+    // by the two regions, so it must match after reversing one of them.
+    const counts = new Map<string, number>()
+    for (const c of cubics) {
+      const fwd = c.join(',')
+      const rev = [c[6], c[7], c[4], c[5], c[2], c[3], c[0], c[1]].join(',')
+      const k = fwd < rev ? fwd : rev
+      counts.set(k, (counts.get(k) ?? 0) + 1)
+    }
+    expect(Math.max(...counts.values())).toBeLessThanOrEqual(2) // no cubic emitted 3+ times
+    // Every boundary that does not run along the image edge is shared by two regions,
+    // so every cubic with both endpoints strictly inside the frame must be paired.
+    const interior = cubics.filter((c) =>
+      [0, 6].every((i) => c[i] > 0 && c[i] < 96 && c[i + 1] > 0 && c[i + 1] < 96),
+    )
+    expect(interior.length).toBeGreaterThan(0)
+    for (const c of interior) {
+      const fwd = c.join(',')
+      const rev = [c[6], c[7], c[4], c[5], c[2], c[3], c[0], c[1]].join(',')
+      expect(counts.get(fwd < rev ? fwd : rev)).toBe(2)
+    }
+  })
+
   it('is byte-deterministic with all output options enabled', () => {
     const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
     const opts = {

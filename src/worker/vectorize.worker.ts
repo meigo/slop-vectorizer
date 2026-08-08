@@ -13,8 +13,8 @@ import { preprocess, isIdentityPre, type PreOptions } from './pipeline/preproces
 import { estimatePalette } from './pipeline/palette'
 import { segmentImage } from './pipeline/segment'
 import { extractBoundaries, loopPointsOf } from './pipeline/boundaries'
-import { findCorners } from './pipeline/corners'
-import { fitLoop, type Cubic } from './pipeline/fitcurves'
+import { findCorners, findOpenCorners } from './pipeline/corners'
+import { fitArc, reverseCubics, type Cubic } from './pipeline/fitcurves'
 import { assembleSvg, polygonArea, type RegionPath } from './pipeline/svg'
 
 const ORDER: StageName[] = ['pre', 'palette', 'segment', 'boundaries', 'corners', 'fit', 'svg']
@@ -47,8 +47,8 @@ interface Cache {
   palette?: Palette
   seg?: Segmentation
   bounds?: Boundaries
-  loopPts?: Float64Array[][] // per region, per loop: the assembled raw polyline
-  corners?: number[][][]
+  areas?: number[] // per region: largest loop area (path ordering + background pick)
+  corners?: number[][] // per arc: break indices
 }
 const cache: Cache = { image: null, options: null }
 
@@ -120,26 +120,37 @@ function run(
     )
   if (fromIdx <= ORDER.indexOf('boundaries') || !cache.bounds) {
     cache.bounds = stage('boundaries', () => extractBoundaries(src, cache.seg!, cache.palette!))
-    cache.loopPts = cache.bounds.regions.map((r) =>
-      r.loops.map((refs) => loopPointsOf(cache.bounds!.arcs, refs)),
+    // Areas rank the paths and pick the background; they only depend on the raw
+    // polylines, so they are computed once here rather than on every re-fit.
+    cache.areas = cache.bounds.regions.map((r) =>
+      Math.max(
+        ...r.loops.map((refs) => Math.abs(polygonArea(loopPointsOf(cache.bounds!.arcs, refs)))),
+      ),
     )
     cache.corners = stage('corners', () =>
-      cache.loopPts!.map((ls) => ls.map((l) => findCorners(l))),
+      cache.bounds!.arcs.map((a) => (a.closed ? findCorners(a.points) : findOpenCorners(a.points))),
     )
   }
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
-  const paths = stage('fit', () =>
-    cache.bounds!.regions.map((r, ri): RegionPath => {
-      const loops: Cubic[][] = cache.loopPts![ri].map((l, li) => {
-        const cubics = fitLoop(l, cache.corners![ri][li], maxErrorPx)
+  const paths = stage('fit', () => {
+    // Each arc is fitted once, in its stored direction; the region that traverses it
+    // backwards reuses the same cubics reversed exactly, so a shared boundary is the
+    // same curve on both sides by construction.
+    const arcCubics = cache.bounds!.arcs.map((a, i) =>
+      fitArc(a.points, cache.corners![i], a.closed, maxErrorPx),
+    )
+    return cache.bounds!.regions.map((r, ri): RegionPath => {
+      const loops: Cubic[][] = r.loops.map((refs) => {
+        const cubics = refs.flatMap((ref) =>
+          ref.reversed ? reverseCubics(arcCubics[ref.arc]) : arcCubics[ref.arc],
+        )
         pointCount += cubics.length * 3 + 1
         return cubics
       })
-      const area = Math.max(...cache.loopPts![ri].map((l) => Math.abs(polygonArea(l))))
-      return { paletteIndex: cache.seg!.regionColor[r.region], area, loops }
-    }),
-  )
+      return { paletteIndex: cache.seg!.regionColor[r.region], area: cache.areas![ri], loops }
+    })
+  })
   const svg = stage('svg', () =>
     assembleSvg(paths, cache.palette!, image.width, image.height, {
       mergePaths: options.mergePaths,

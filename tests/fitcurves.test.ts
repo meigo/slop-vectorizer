@@ -1,6 +1,6 @@
 // tests/fitcurves.test.ts
 import { describe, it, expect } from 'vitest'
-import { fitLoop, type Cubic } from '../src/worker/pipeline/fitcurves'
+import { fitArc, fitLoop, reverseCubics, type Cubic } from '../src/worker/pipeline/fitcurves'
 
 function circleLoop(cx: number, cy: number, r: number, n = 200): Float64Array {
   const pts = new Float64Array(n * 2)
@@ -56,6 +56,70 @@ describe('fitLoop', () => {
       }
     const cubics = fitLoop(new Float64Array(sq), [0, 25, 50, 75], 0.5)
     expect(cubics.length).toBe(4)
+  })
+})
+
+describe('reverseCubics', () => {
+  it('is an exact involution and preserves geometry', () => {
+    const cubics = fitLoop(circleLoop(50, 50, 30), [], 0.5)
+    const back = reverseCubics(reverseCubics(cubics))
+    expect(back).toEqual(cubics)
+    const rev = reverseCubics(cubics)
+    // reversed chain still closes and visits the same endpoint set
+    for (let i = 0; i < rev.length; i++) {
+      const next = rev[(i + 1) % rev.length]
+      expect(rev[i][6]).toBeCloseTo(next[0], 12)
+      expect(rev[i][7]).toBeCloseTo(next[1], 12)
+    }
+  })
+
+  it('reverses seams bit-exactly (no crack between the two sides of an arc)', () => {
+    const cubics = fitLoop(circleLoop(50, 50, 30), [], 0.5)
+    const rev = reverseCubics(cubics)
+    expect(rev.length).toBe(cubics.length)
+    for (let i = 0; i < rev.length; i++) {
+      const src = cubics[cubics.length - 1 - i]
+      expect(rev[i]).toEqual([src[6], src[7], src[4], src[5], src[2], src[3], src[0], src[1]])
+    }
+  })
+})
+
+describe('fitArc', () => {
+  it('open: endpoints are pinned exactly, interior corner honored', () => {
+    const pts: number[] = []
+    for (let i = 0; i <= 20; i++) pts.push(i, 0)
+    for (let i = 1; i <= 20; i++) pts.push(20, i)
+    const arc = new Float64Array(pts)
+    const cubics = fitArc(arc, [20], false, 0.5)
+    expect(cubics[0][0]).toBe(0) // first endpoint exact
+    expect(cubics[0][1]).toBe(0)
+    expect(cubics[cubics.length - 1][6]).toBe(20) // last endpoint exact
+    expect(cubics[cubics.length - 1][7]).toBe(20)
+    expect(cubics.length).toBe(2) // one straight run per side of the corner
+  })
+
+  it('open: chains without gaps and pins endpoints even with no corners', () => {
+    const pts: number[] = []
+    for (let i = 0; i <= 40; i++) {
+      const a = (Math.PI * i) / 40
+      pts.push(50 + 30 * Math.cos(a), 50 + 30 * Math.sin(a))
+    }
+    const arc = new Float64Array(pts)
+    const cubics = fitArc(arc, [], false, 0.5)
+    expect(cubics.length).toBeGreaterThan(0)
+    expect(cubics[0][0]).toBe(pts[0])
+    expect(cubics[0][1]).toBe(pts[1])
+    expect(cubics[cubics.length - 1][6]).toBe(pts[pts.length - 2])
+    expect(cubics[cubics.length - 1][7]).toBe(pts[pts.length - 1])
+    for (let i = 0; i + 1 < cubics.length; i++) {
+      expect(cubics[i][6]).toBe(cubics[i + 1][0])
+      expect(cubics[i][7]).toBe(cubics[i + 1][1])
+    }
+  })
+
+  it('closed: delegates to fitLoop', () => {
+    const loop = circleLoop(50, 50, 30)
+    expect(fitArc(loop, [], true, 0.5)).toEqual(fitLoop(loop, [], 0.5))
   })
 })
 

@@ -9,8 +9,8 @@ import { preprocess, isIdentityPre, type PreOptions } from './preprocess'
 import { estimatePalette } from './palette'
 import { segmentImage } from './segment'
 import { extractBoundaries, loopPointsOf } from './boundaries'
-import { findCorners } from './corners'
-import { fitLoop, type Cubic } from './fitcurves'
+import { findCorners, findOpenCorners } from './corners'
+import { fitArc, reverseCubics, type Cubic } from './fitcurves'
 import { assembleSvg, polygonArea, type RegionPath } from './svg'
 
 export function vectorize(
@@ -50,21 +50,34 @@ export function vectorize(
     segmentImage(src, palette, options.despeckleSize, options.gapClosing),
   )
   const bounds = stage('boundaries', () => extractBoundaries(src, seg, palette))
-  const loopPts = bounds.regions.map((r) => r.loops.map((refs) => loopPointsOf(bounds.arcs, refs)))
-  const cornersPerLoop = stage('corners', () => loopPts.map((ls) => ls.map((l) => findCorners(l))))
+  // Areas rank the paths and pick the background; they only depend on the raw
+  // polylines, so they are computed once from the arcs rather than per fit.
+  const areas = bounds.regions.map((r) =>
+    Math.max(...r.loops.map((refs) => Math.abs(polygonArea(loopPointsOf(bounds.arcs, refs))))),
+  )
+  const cornersPerArc = stage('corners', () =>
+    bounds.arcs.map((a) => (a.closed ? findCorners(a.points) : findOpenCorners(a.points))),
+  )
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
-  const paths = stage('fit', () =>
-    bounds.regions.map((r, ri): RegionPath => {
-      const loops: Cubic[][] = loopPts[ri].map((l, li) => {
-        const cubics = fitLoop(l, cornersPerLoop[ri][li], maxErrorPx)
+  const paths = stage('fit', () => {
+    // Each arc is fitted once, in its stored direction; the region that traverses it
+    // backwards reuses the same cubics reversed exactly, so a shared boundary is the
+    // same curve on both sides by construction.
+    const arcCubics = bounds.arcs.map((a, i) =>
+      fitArc(a.points, cornersPerArc[i], a.closed, maxErrorPx),
+    )
+    return bounds.regions.map((r, ri): RegionPath => {
+      const loops: Cubic[][] = r.loops.map((refs) => {
+        const cubics = refs.flatMap((ref) =>
+          ref.reversed ? reverseCubics(arcCubics[ref.arc]) : arcCubics[ref.arc],
+        )
         pointCount += cubics.length * 3 + 1
         return cubics
       })
-      const area = Math.max(...loopPts[ri].map((l) => Math.abs(polygonArea(l))))
-      return { paletteIndex: seg.regionColor[r.region], area, loops }
-    }),
-  )
+      return { paletteIndex: seg.regionColor[r.region], area: areas[ri], loops }
+    })
+  })
   const svg = stage('svg', () =>
     assembleSvg(paths, palette, image.width, image.height, {
       mergePaths: options.mergePaths,
