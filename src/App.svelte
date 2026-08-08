@@ -123,9 +123,9 @@
         <ImagePane image={displayImage} label="Original" {viewport} />
         <ImagePane svg={result ? sizedSvg : null} label="SVG" {viewport} />
       {/if}
+      {#if stage}<span class="stage-pill">Vectorizing… ({stage})</span>{/if}
     </div>
     <aside class="panel">
-      {#if stage}<p>Vectorizing… ({stage})</p>{/if}
       <ControlsPanel
         bind:options bind:upscale bind:mode
         {stats} svg={result?.svg ?? null} {notice}
@@ -145,8 +145,13 @@
 <style>
   :global(html), :global(body), :global(#app) { height: 100%; margin: 0; }
   .app-grid { display: grid; grid-template-columns: 1fr 300px; grid-template-rows: minmax(0, 1fr); height: 100vh; }
-  .views { display: grid; min-width: 0; }
+  .views { display: grid; min-width: 0; position: relative; }
   .views.side { grid-template-columns: 1fr 1fr; gap: 2px; }
+  .stage-pill {
+    position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%);
+    background: #333c; color: white; font-family: system-ui, sans-serif; font-size: 0.85rem;
+    padding: 0.35rem 0.9rem; border-radius: 999px; pointer-events: none;
+  }
   .panel { overflow-y: auto; border-left: 1px solid #ddd; padding: 0.75rem; font-family: system-ui, sans-serif; }
   .empty { height: 100vh; display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; }
   .toast {
