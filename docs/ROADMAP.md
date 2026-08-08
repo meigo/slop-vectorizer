@@ -4,9 +4,10 @@ Ideas evaluated and consciously deferred — with enough design context to pick 
 
 ## Stacked / layered shapes (VM-style output arrangement)
 
-**Status:** deferred 2026-08-09 — original motivation (smoothing gaps between abutting shapes) was
-eliminated at the root by shared-arc fitting (`docs/superpowers/specs/2026-08-08-shared-arc-fitting-design.md`),
-which makes cracks impossible by construction. Stacking is now purely an output-arrangement option.
+**Status:** IMPLEMENTED 2026-08-09 (`docs/superpowers/specs/2026-08-09-stacked-shapes-design.md`) —
+activated for file size: each boundary serialized once instead of twice; measured 11–37% smaller than
+the flat+merge default on test fixtures. Deferred remainder: stacked+merge coexistence,
+stacked+transparent-bg, a deep-nesting e2e fixture (verified empirically at 4 levels, not in suite).
 
 **What it is:** instead of the current flat/cutout output (shapes tile the plane exactly, holes where
 other colors sit inside), shapes are emitted solid and extended *beneath* whatever nests inside them,
