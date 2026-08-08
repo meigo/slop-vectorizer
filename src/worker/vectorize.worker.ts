@@ -35,7 +35,7 @@ export function firstDirtyStage(
   if (prev.colorCount !== next.colorCount) return 'palette'
   if (prev.despeckleSize !== next.despeckleSize || prev.gapClosing !== next.gapClosing)
     return 'segment'
-  return 'fit' // smoothness (or nothing) changed; fit+svg are cheap
+  return 'fit' // smoothness, mergePaths, transparentBg, optimize, colorOverrides (or nothing) changed; fit+svg are cheap
 }
 
 interface Cache {

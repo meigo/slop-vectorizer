@@ -72,16 +72,19 @@
   })
 
   // Overrides are index-aligned with the palette they were made for; when a new
-  // result arrives with a different palette, they're stale — drop them. (The one
-  // result computed with mismatched overrides renders once; the reset takes effect
-  // on the next re-run. Accepted transient per spec.)
+  // result arrives with a different palette, they're stale — drop them and rerun
+  // so the mismatched-override render is bounded to one debounce cycle instead of
+  // persisting indefinitely.
   $effect(() => {
     const pal = result?.palette
     if (!pal) return
     const changed =
       lastPalette !== null &&
       (lastPalette.length !== pal.length || lastPalette.some((v, i) => v !== pal[i]))
-    if (changed && options.colorOverrides) options.colorOverrides = null
+    if (changed && options.colorOverrides) {
+      options.colorOverrides = null
+      rerun()
+    }
     lastPalette = pal
   })
 
