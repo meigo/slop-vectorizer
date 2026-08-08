@@ -185,7 +185,14 @@
 
 {#if !image}
   <main class="empty">
-    <Dropzone onfile={handleFile} {error} />
+    <div class="intro">
+      <h1>slop-vectorizer</h1>
+      <p>
+        Turn logos, sketches, and flat art into clean SVG — with sub-pixel edge recovery, entirely
+        in your browser. Nothing is uploaded.
+      </p>
+      <Dropzone onfile={handleFile} {error} />
+    </div>
   </main>
 {:else}
   <div class="app-grid">
@@ -276,6 +283,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+  .intro {
+    max-width: 440px;
+    text-align: center;
+  }
+  .intro h1 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0 0 0.5rem;
+  }
+  .intro p {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+    margin: 0 0 1.5rem;
     background: var(--color-canvas-bg);
   }
   .toast {

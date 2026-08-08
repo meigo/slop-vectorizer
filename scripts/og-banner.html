@@ -1,0 +1,138 @@
+<!doctype html>
+<!-- Source for public/og.png. Regenerate with:
+     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+       --screenshot=public/og.png --window-size=1200,630 --virtual-time-budget=5000 \
+       file://$PWD/scripts/og-banner.html -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        box-sizing: border-box;
+      }
+      body {
+        width: 1200px;
+        height: 630px;
+        background: #1e1e1e;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        overflow: hidden;
+        position: relative;
+      }
+      /* checkerboard only on the left (bitmap) side */
+      .checker {
+        position: absolute;
+        inset: 0 600px 0 0;
+        background: repeating-conic-gradient(#262626 0% 25%, #1e1e1e 0% 50%) 0 0 / 72px 72px;
+      }
+      .divider {
+        position: absolute;
+        left: 599px;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: #6688cc;
+      }
+      svg {
+        position: absolute;
+        inset: 0;
+      }
+      .title {
+        position: absolute;
+        left: 80px;
+        bottom: 118px;
+        font-size: 66px;
+        font-weight: 600;
+        color: #e0e0e0;
+        letter-spacing: -0.02em;
+      }
+      .tagline {
+        position: absolute;
+        left: 80px;
+        bottom: 70px;
+        font-size: 30px;
+        color: #999999;
+      }
+      .side-label {
+        position: absolute;
+        top: 56px;
+        font-size: 22px;
+        color: #666666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="checker"></div>
+    <div class="divider"></div>
+    <span class="side-label" style="left: 80px">bitmap</span>
+    <span class="side-label" style="left: 648px; color: #999">svg</span>
+
+    <svg width="1200" height="630" viewBox="0 0 1200 630">
+      <!-- LEFT: the same edge, rasterized — pixel staircase with anti-aliased blends -->
+      <g>
+        <!-- solid pixels above the edge -->
+        <rect x="72" y="144" width="48" height="48" fill="#e0e0e0" />
+        <rect x="120" y="144" width="48" height="48" fill="#e0e0e0" />
+        <rect x="168" y="144" width="48" height="48" fill="#e0e0e0" />
+        <rect x="120" y="192" width="48" height="48" fill="#e0e0e0" />
+        <rect x="168" y="192" width="48" height="48" fill="#e0e0e0" />
+        <rect x="216" y="192" width="48" height="48" fill="#e0e0e0" />
+        <rect x="264" y="192" width="48" height="48" fill="#e0e0e0" />
+        <rect x="216" y="240" width="48" height="48" fill="#e0e0e0" />
+        <rect x="264" y="240" width="48" height="48" fill="#e0e0e0" />
+        <rect x="312" y="240" width="48" height="48" fill="#e0e0e0" />
+        <rect x="360" y="240" width="48" height="48" fill="#e0e0e0" />
+        <rect x="312" y="288" width="48" height="48" fill="#e0e0e0" />
+        <rect x="360" y="288" width="48" height="48" fill="#e0e0e0" />
+        <rect x="408" y="288" width="48" height="48" fill="#e0e0e0" />
+        <rect x="456" y="288" width="48" height="48" fill="#e0e0e0" />
+        <rect x="408" y="336" width="48" height="48" fill="#e0e0e0" />
+        <rect x="456" y="336" width="48" height="48" fill="#e0e0e0" />
+        <rect x="504" y="336" width="48" height="48" fill="#e0e0e0" />
+        <rect x="552" y="336" width="48" height="48" fill="#e0e0e0" />
+        <rect x="504" y="384" width="48" height="48" fill="#e0e0e0" />
+        <rect x="552" y="384" width="48" height="48" fill="#e0e0e0" />
+        <!-- anti-aliased blend pixels along the staircase -->
+        <rect x="72" y="192" width="48" height="48" fill="#8a8a8a" />
+        <rect x="216" y="144" width="48" height="48" fill="#555555" />
+        <rect x="168" y="240" width="48" height="48" fill="#8a8a8a" />
+        <rect x="312" y="192" width="48" height="48" fill="#555555" />
+        <rect x="264" y="288" width="48" height="48" fill="#8a8a8a" />
+        <rect x="408" y="240" width="48" height="48" fill="#555555" />
+        <rect x="360" y="336" width="48" height="48" fill="#8a8a8a" />
+        <rect x="504" y="288" width="48" height="48" fill="#555555" />
+        <rect x="456" y="384" width="48" height="48" fill="#8a8a8a" />
+        <rect x="552" y="432" width="48" height="48" fill="#8a8a8a" />
+      </g>
+
+      <!-- RIGHT: the same edge, vectorized — smooth curve with Bézier handles -->
+      <g>
+        <path
+          d="M 600 408 C 760 456 900 462 1010 380 C 1090 320 1130 250 1140 170"
+          fill="none"
+          stroke="#e0e0e0"
+          stroke-width="5"
+          stroke-linecap="round"
+        />
+        <!-- control handles -->
+        <line x1="600" y1="408" x2="760" y2="456" stroke="#6688cc" stroke-width="1.5" />
+        <line x1="1010" y1="380" x2="900" y2="462" stroke="#6688cc" stroke-width="1.5" />
+        <line x1="1010" y1="380" x2="1090" y2="320" stroke="#6688cc" stroke-width="1.5" />
+        <circle cx="760" cy="456" r="7" fill="#1e1e1e" stroke="#6688cc" stroke-width="2" />
+        <circle cx="900" cy="462" r="7" fill="#1e1e1e" stroke="#6688cc" stroke-width="2" />
+        <circle cx="1090" cy="320" r="7" fill="#1e1e1e" stroke="#6688cc" stroke-width="2" />
+        <rect x="592" y="400" width="16" height="16" fill="#6688cc" />
+        <rect x="1002" y="372" width="16" height="16" fill="#6688cc" />
+      </g>
+    </svg>
+
+    <div class="title">slop-vectorizer</div>
+    <div class="tagline">image → SVG, entirely in your browser</div>
+  </body>
+</html>
