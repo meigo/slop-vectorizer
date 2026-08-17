@@ -194,6 +194,18 @@
         oninput={onchange}
       /></label
     >
+    <!-- Divides out a fitted lighting gradient, for photographed/scanned art where
+         the paper drifts bright enough on one side to break into blotches. -->
+    <label
+      >Flatten <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.05"
+        bind:value={options.flatten}
+        oninput={onchange}
+      /></label
+    >
     <label
       >Blur <input
         type="range"
@@ -220,6 +232,7 @@
         options.whitePoint = 255
         options.blurRadius = 0
         options.saturation = 1
+        options.flatten = 0
         onchange()
       }}>Reset</button
     >

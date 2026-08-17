@@ -29,7 +29,8 @@ export function firstDirtyStage(
     prev.blackPoint !== next.blackPoint ||
     prev.whitePoint !== next.whitePoint ||
     prev.blurRadius !== next.blurRadius ||
-    prev.saturation !== next.saturation
+    prev.saturation !== next.saturation ||
+    prev.flatten !== next.flatten
   )
     return 'pre'
   if (prev.colorCount !== next.colorCount) return 'palette'
@@ -83,6 +84,7 @@ function run(
     whitePoint: options.whitePoint,
     blurRadius: options.blurRadius,
     saturation: options.saturation,
+    flatten: options.flatten,
   }
   const identity = isIdentityPre(preOpts)
   const preFieldsChanged =
@@ -90,7 +92,8 @@ function run(
     prev.blackPoint !== options.blackPoint ||
     prev.whitePoint !== options.whitePoint ||
     prev.blurRadius !== options.blurRadius ||
-    prev.saturation !== options.saturation
+    prev.saturation !== options.saturation ||
+    prev.flatten !== options.flatten
   if (preFieldsChanged) cache.palPre = undefined
   if (fromIdx <= ORDER.indexOf('pre') || !cache.pre)
     cache.pre = identity ? image : stage('pre', () => preprocess(image, preOpts))

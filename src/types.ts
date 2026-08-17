@@ -15,6 +15,7 @@ export interface PipelineOptions {
   whitePoint: number // levels white point, 0..255
   blurRadius: number // pre-blur box radius, px
   saturation: number // 1 = unchanged
+  flatten: number // 0..1, divides out a fitted illumination gradient (uneven lighting)
   gapClosing: number // 0–3 px, bridges dashed thin strokes
   colorOverrides: (string | null)[] | null // output recolor by palette index, '#rrggbb'; null = detected
   stackedShapes: boolean // solid shapes painted in containment order, no holes
@@ -31,6 +32,7 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
   whitePoint: 255,
   blurRadius: 0,
   saturation: 1,
+  flatten: 0,
   gapClosing: 0,
   colorOverrides: null,
   stackedShapes: false,

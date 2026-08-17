@@ -35,6 +35,7 @@ export function vectorize(
     whitePoint: options.whitePoint,
     blurRadius: options.blurRadius,
     saturation: options.saturation,
+    flatten: options.flatten,
   }
   const identity = isIdentityPre(preOpts)
   const src = identity ? image : stage('pre', () => preprocess(image, preOpts))

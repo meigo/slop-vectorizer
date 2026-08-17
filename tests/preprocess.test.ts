@@ -105,3 +105,103 @@ describe('preprocess', () => {
     for (let p = 0; p < out.data.length; p += 4) expect(Number.isFinite(out.data[p])).toBe(true)
   })
 })
+
+describe('preprocess: flatten', () => {
+  /**
+   * Paper lit unevenly: luminance ramps left-to-right and top-to-bottom, plus grain.
+   * `art` adds the case that actually matters — a large solid bright block (a face)
+   * and broad dark strokes (ink) on mid-toned paper, so the paper is neither the
+   * lightest nor the darkest thing present.
+   */
+  function litPaper(w: number, h: number, lo: number, hi: number, art = false): RasterImage {
+    const rnd = mulberry32(7)
+    const data = new Uint8ClampedArray(w * h * 4)
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const t = (x / (w - 1) + y / (h - 1)) / 2
+        let v = lo + (hi - lo) * t + (rnd() - 0.5) * 16
+        if (art) {
+          if (x > w / 3 && x < (2 * w) / 3 && y > h / 3 && y < (2 * h) / 3) v = 235 // face
+          else if (x > (3 * w) / 4 || y > (3 * h) / 4) if ((x + y) % 11 < 5) v = 20 // ink
+        }
+        const p = (y * w + x) * 4
+        data.set([v, v, v, 255], p)
+      }
+    return { width: w, height: h, data }
+  }
+
+  /** Mean luminance of a 12px patch. */
+  const patch = (img: RasterImage, x: number, y: number) => {
+    let s = 0
+    for (let j = 0; j < 12; j++)
+      for (let i = 0; i < 12; i++) s += img.data[((y + j) * img.width + x + i) * 4]
+    return s / 144
+  }
+
+  it('flatten 0 is identity', () => {
+    const img = litPaper(64, 64, 108, 177)
+    expect(preprocess(img, { ...IDENTITY_PRE, flatten: 0 })).toBe(img)
+  })
+
+  it('removes a lighting ramp: corners converge to one paper level', () => {
+    const img = litPaper(128, 128, 108, 177)
+    const before = Math.abs(patch(img, 4, 4) - patch(img, 110, 110))
+    const out = preprocess(img, { ...IDENTITY_PRE, flatten: 1 })
+    const after = Math.abs(patch(out, 4, 4) - patch(out, 110, 110))
+    expect(before).toBeGreaterThan(50) // the ramp really is there
+    expect(after).toBeLessThan(8) // and is gone afterwards
+  })
+
+  it('strength scales the correction', () => {
+    const img = litPaper(128, 128, 108, 177)
+    const spread = (s: number) => {
+      const o = preprocess(img, { ...IDENTITY_PRE, flatten: s })
+      return Math.abs(patch(o, 4, 4) - patch(o, 110, 110))
+    }
+    expect(spread(0.5)).toBeGreaterThan(spread(1))
+    expect(spread(0.5)).toBeLessThan(spread(0.05))
+  })
+
+  it('keeps a large bright region distinct from the paper', () => {
+    // the whole point of fitting a stiff global surface rather than a local one:
+    // a 40x40 solid bright block must not be read as "paper here is bright"
+    const img = litPaper(128, 128, 108, 177, true)
+    const out = preprocess(img, { ...IDENTITY_PRE, flatten: 1 })
+    const paperLevel = (patch(out, 4, 4) + patch(out, 110, 4)) / 2
+    expect(patch(out, 58, 58) - paperLevel).toBeGreaterThan(50)
+  })
+
+  it('paper that is neither the lightest nor the darkest tone still flattens', () => {
+    // The real failure mode: with ink below the paper and a face above it, a fixed
+    // percentile tracks whichever of the two dominates a cell, and plain outlier
+    // rejection gives up at ~50% contamination — the surface then follows the ink and
+    // the correction amplifies that corner instead of levelling it.
+    const img = litPaper(160, 160, 108, 177, true)
+    // sample paper only: clear of the face block and of the inked quarters
+    const paper = (i: RasterImage) => [
+      patch(i, 4, 4),
+      patch(i, 105, 4),
+      patch(i, 4, 105),
+      patch(i, 105, 105),
+    ]
+    const spread = (v: number[]) => Math.max(...v) - Math.min(...v)
+    expect(spread(paper(img))).toBeGreaterThan(30)
+    const out = preprocess(img, { ...IDENTITY_PRE, flatten: 1 })
+    expect(spread(paper(out))).toBeLessThan(10)
+    // and the correction never runs away into clipping
+    expect(Math.max(...paper(out))).toBeLessThan(230)
+  })
+
+  it('leaves an already-even image essentially alone', () => {
+    const img = litPaper(96, 96, 140, 140)
+    const out = preprocess(img, { ...IDENTITY_PRE, flatten: 1 })
+    expect(Math.abs(patch(out, 4, 4) - patch(img, 4, 4))).toBeLessThan(4)
+    expect(Math.abs(patch(out, 80, 80) - patch(img, 80, 80))).toBeLessThan(4)
+  })
+
+  it('too small to fit: passes pixels through unchanged', () => {
+    const img = litPaper(6, 6, 100, 200)
+    const out = preprocess(img, { ...IDENTITY_PRE, flatten: 1 })
+    for (let p = 0; p < img.data.length; p += 4) expect(out.data[p]).toBe(img.data[p])
+  })
+})
