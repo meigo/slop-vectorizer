@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { assembleSvg, polygonArea, type RegionPath } from '../src/worker/pipeline/svg'
+import { assembleSvg, maxIndex, polygonArea, type RegionPath } from '../src/worker/pipeline/svg'
 import type { Palette } from '../src/types'
 import type { Cubic } from '../src/worker/pipeline/fitcurves'
 
@@ -8,7 +8,6 @@ describe('svg assembly', () => {
   const square: RegionPath = {
     paletteIndex: 1,
     area: 100,
-    stackOrder: 0,
     loops: [
       [
         [0, 0, 3, 0, 7, 0, 10, 0],
@@ -21,7 +20,6 @@ describe('svg assembly', () => {
   const bg: RegionPath = {
     paletteIndex: 0,
     area: 400,
-    stackOrder: 0,
     loops: [[[0, 0, 20, 0, 20, 0, 20, 20]]],
   }
 
@@ -68,7 +66,6 @@ describe('svg assembly', () => {
     const bgPocket: RegionPath = {
       paletteIndex: 0,
       area: 5,
-      stackOrder: 0,
       loops: [[[2, 2, 3, 2, 3, 2, 4, 2]]],
     }
     const svg = assembleSvg([square, bg, bgPocket], palette, 20, 20, { ...V1, transparentBg: true })
@@ -179,10 +176,12 @@ describe('assembleSvg stacked mode', () => {
       return [p[0], p[1], p[0], p[1], q[0], q[1], q[0], q[1]] as Cubic
     })
   }
+  // already in paint order (the caller's job); note it is NOT area-descending, so a
+  // stray sort by area would reorder the last two
   const paths: RegionPath[] = [
-    { paletteIndex: 1, area: 25, loops: [square(30, 30, 5)], stackOrder: 950 },
-    { paletteIndex: 0, area: 100, loops: [square(0, 0, 10)], stackOrder: 0 },
-    { paletteIndex: 1, area: 16, loops: [square(10, 10, 4)], stackOrder: 310 },
+    { paletteIndex: 0, area: 100, loops: [square(0, 0, 10)] },
+    { paletteIndex: 1, area: 16, loops: [square(10, 10, 4)] },
+    { paletteIndex: 1, area: 25, loops: [square(30, 30, 5)] },
   ]
   const opts = {
     mergePaths: false,
@@ -192,12 +191,12 @@ describe('assembleSvg stacked mode', () => {
     stackedShapes: true,
   }
 
-  it('paints in ascending stackOrder, not by area', () => {
+  it('paints in the order given, not by area', () => {
     const svg = assembleSvg(paths, palette, 40, 40, opts)
     const fills = [...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1])
     expect(fills).toEqual(['#ffffff', '#000000', '#000000'])
     // area-descending would give the same first element but order 100,25,16 →
-    // discriminate via the d attributes: second path must be the stackOrder-310 square
+    // discriminate via the d attributes: the area-16 square must stay second
     const ds = [...svg.matchAll(/d="([^"]*)"/g)].map((m) => m[1])
     expect(ds[1]).toContain('M10 10')
     expect(ds[2]).toContain('M30 30')
@@ -219,5 +218,23 @@ describe('assembleSvg stacked mode', () => {
     expect(svg).toContain('fill-rule="evenodd"')
     const ds = [...svg.matchAll(/d="([^"]*)"/g)].map((m) => m[1])
     expect(ds[0]).toContain('M0 0') // largest area first
+  })
+})
+
+describe('maxIndex', () => {
+  it('returns the first index of the largest value, -1 when empty', () => {
+    expect(maxIndex([3, 9, 4])).toBe(1)
+    expect(maxIndex([5, 5, 2])).toBe(0) // ties resolve to the first, as indexOf did
+    expect(maxIndex([7])).toBe(0)
+    expect(maxIndex([])).toBe(-1)
+  })
+
+  it('handles more loops than a spread can carry as arguments', () => {
+    // a halftone scan gives its background region hundreds of thousands of hole
+    // loops; Math.max(...la) throws RangeError past ~100k
+    const n = 500_000
+    const la = new Array(n).fill(1)
+    la[n - 7] = 2
+    expect(maxIndex(la)).toBe(n - 7)
   })
 })

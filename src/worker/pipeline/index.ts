@@ -11,7 +11,7 @@ import { segmentImage } from './segment'
 import { extractBoundaries, loopPointsOf } from './boundaries'
 import { findCorners, findOpenCorners } from './corners'
 import { fitArc, reverseCubics, type Cubic } from './fitcurves'
-import { assembleSvg, polygonArea, type RegionPath } from './svg'
+import { assembleSvg, maxIndex, polygonArea, type RegionPath } from './svg'
 
 export function vectorize(
   image: RasterImage,
@@ -55,38 +55,32 @@ export function vectorize(
   const loopAreas = bounds.regions.map((r) =>
     r.loops.map((refs) => Math.abs(polygonArea(loopPointsOf(bounds.arcs, refs)))),
   )
-  const areas = loopAreas.map((la) => Math.max(...la))
-  const outerLoop = loopAreas.map((la) => la.indexOf(Math.max(...la)))
+  const areas: number[] = []
+  const outerLoop: number[] = []
+  for (const la of loopAreas) {
+    const i = maxIndex(la)
+    // every emitted region has at least one boundary edge, hence at least one loop
+    if (i < 0) throw new Error('boundaries: region with no loops (bug)')
+    outerLoop.push(i)
+    areas.push(la[i])
+  }
   const cornersPerArc = stage('corners', () =>
     bounds.arcs.map((a) => (a.closed ? findCorners(a.points) : findOpenCorners(a.points))),
   )
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
   const stacked = options.stackedShapes
-  const firstPixel = new Int32Array(seg.regionCount).fill(-1)
-  if (stacked) {
-    let seen = 0
-    for (let i = 0; i < seg.labelMap.length && seen < seg.regionCount; i++) {
-      if (firstPixel[seg.labelMap[i]] === -1) {
-        firstPixel[seg.labelMap[i]] = i
-        seen++
-      }
-    }
-  }
   const paths = stage('fit', () => {
     // Each arc is fitted once, in its stored direction; the region that traverses it
     // backwards reuses the same cubics reversed exactly, so a shared boundary is the
-    // same curve on both sides by construction. Stacked mode keeps only each region's
-    // outer loop; the used-set guard skips arcs no kept loop references (in practice
-    // every arc is the inner side's outer loop, so this is purely defensive).
-    const used = stacked ? new Set<number>() : null
-    if (used)
-      bounds.regions.forEach((r, ri) => {
-        for (const ref of r.loops[outerLoop[ri]]) used.add(ref.arc)
-      })
+    // same curve on both sides by construction.
     const arcCubics = bounds.arcs.map((a, i) =>
-      used && !used.has(i) ? [] : fitArc(a.points, cornersPerArc[i], a.closed, maxErrorPx),
+      fitArc(a.points, cornersPerArc[i], a.closed, maxErrorPx),
     )
+    // Stacked mode keeps only each region's outer loop and relies on the emission
+    // order: extractBoundaries yields regions by ascending first pixel, which is a
+    // valid containment (painter's) order — if A encloses B, A owns a pixel in a row
+    // above B's first. See the guarantee at the top of boundaries.ts.
     return bounds.regions.map((r, ri): RegionPath => {
       const keptLoops = stacked ? [r.loops[outerLoop[ri]]] : r.loops
       const loops: Cubic[][] = keptLoops.map((refs) => {
@@ -99,7 +93,6 @@ export function vectorize(
       return {
         paletteIndex: seg.regionColor[r.region],
         area: areas[ri],
-        stackOrder: firstPixel[r.region],
         loops,
       }
     })

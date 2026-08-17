@@ -10,6 +10,14 @@ import type {
 
 // Directed boundary edges on the integer lattice, region kept on the LEFT while walking.
 // Vertex ids: v = y * (w+1) + x for lattice point (x, y).
+//
+// EMISSION ORDER (relied on by stacked output): `regions` comes out sorted by each
+// region's first pixel in row-major order. The horizontal sweep below runs y outer /
+// x inner and a region is first named there at its topmost row, at its leftmost x in
+// that row — it cannot appear earlier as an 'above', since owning a pixel one row up
+// would have named it during the previous y. That order is a valid containment order:
+// if A encloses B, A owns a pixel in a row above B's first. Reordering the sweeps
+// breaks stacked painting; tests/boundaries.test.ts pins it.
 
 export function extractBoundaries(
   image: RasterImage,

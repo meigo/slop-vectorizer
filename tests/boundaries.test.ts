@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { estimatePalette } from '../src/worker/pipeline/palette'
 import { segmentImage } from '../src/worker/pipeline/segment'
 import { extractBoundaries, loopPointsOf } from '../src/worker/pipeline/boundaries'
-import { renderShape, insideCircle } from './helpers/render'
+import { renderShape, insideCircle, insideRing } from './helpers/render'
 import type { ArcRef, Boundaries, Palette, RasterImage } from '../src/types'
 
 describe('extractBoundaries', () => {
@@ -211,5 +211,48 @@ describe('extractBoundaries: diagonal junction', () => {
     expect(inner[0].arc).toBe(hole[0].arc) // fitted once, not twice
     expect(inner[0].reversed).not.toBe(hole[0].reversed)
     expect(key(pointsOf(hole))).toBe(key(pointsOf(inner)))
+  })
+})
+
+describe('extractBoundaries: region emission order', () => {
+  /** Row-major index of each region's first pixel. */
+  const firstPixels = (seg: { labelMap: Int32Array; regionCount: number }) => {
+    const f = new Int32Array(seg.regionCount).fill(-1)
+    for (let i = 0; i < seg.labelMap.length; i++)
+      if (f[seg.labelMap[i]] === -1) f[seg.labelMap[i]] = i
+    return f
+  }
+
+  // Stacked output paints regions in the order extractBoundaries emits them, with no
+  // sort of its own, so this order IS the containment order. Reordering the edge
+  // sweeps in boundaries.ts would silently break stacked painting; this catches it.
+  const checkOrder = (img: RasterImage, despeckle: number) => {
+    const pal = estimatePalette(img, 2)
+    const seg = segmentImage(img, pal, despeckle)
+    const bounds = extractBoundaries(img, seg, pal)
+    const f = firstPixels(seg)
+    const keys = bounds.regions.map((r) => f[r.region])
+    expect(bounds.regions.length).toBe(seg.regionCount) // every region is emitted
+    expect(keys).toEqual([...keys].sort((a, b) => a - b))
+    expect(new Set(keys).size).toBe(keys.length) // strictly increasing, no ties
+    return keys.length
+  }
+
+  it('nested ring: outer region before the one it encloses', () => {
+    const img = renderShape(64, 64, insideRing(32, 32, 18, 6), [0, 0, 0], [255, 255, 255])
+    expect(checkOrder(img, 0)).toBe(3) // bg, ring, inner disc
+  })
+
+  it('hundreds of interleaved regions stay in first-pixel order', () => {
+    for (const seed of [1, 7, 99, 12345]) {
+      let s = seed
+      const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)
+      const data = new Uint8ClampedArray(64 * 64 * 4).fill(255)
+      for (let i = 0; i < 64 * 64; i++) {
+        const v = rnd() < 0.5 ? 0 : 255
+        data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = v
+      }
+      expect(checkOrder({ width: 64, height: 64, data }, 0)).toBeGreaterThan(100)
+    }
   })
 })

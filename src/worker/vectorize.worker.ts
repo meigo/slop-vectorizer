@@ -15,7 +15,7 @@ import { segmentImage } from './pipeline/segment'
 import { extractBoundaries, loopPointsOf } from './pipeline/boundaries'
 import { findCorners, findOpenCorners } from './pipeline/corners'
 import { fitArc, reverseCubics, type Cubic } from './pipeline/fitcurves'
-import { assembleSvg, polygonArea, type RegionPath } from './pipeline/svg'
+import { assembleSvg, maxIndex, polygonArea, type RegionPath } from './pipeline/svg'
 
 const ORDER: StageName[] = ['pre', 'palette', 'segment', 'boundaries', 'corners', 'fit', 'svg']
 
@@ -126,8 +126,17 @@ function run(
     const loopAreas = cache.bounds.regions.map((r) =>
       r.loops.map((refs) => Math.abs(polygonArea(loopPointsOf(cache.bounds!.arcs, refs)))),
     )
-    cache.areas = loopAreas.map((la) => Math.max(...la))
-    cache.outerLoop = loopAreas.map((la) => la.indexOf(Math.max(...la)))
+    const areas: number[] = []
+    const outerLoop: number[] = []
+    for (const la of loopAreas) {
+      const i = maxIndex(la)
+      // every emitted region has at least one boundary edge, hence at least one loop
+      if (i < 0) throw new Error('boundaries: region with no loops (bug)')
+      outerLoop.push(i)
+      areas.push(la[i])
+    }
+    cache.areas = areas
+    cache.outerLoop = outerLoop
     cache.corners = stage('corners', () =>
       cache.bounds!.arcs.map((a) => (a.closed ? findCorners(a.points) : findOpenCorners(a.points))),
     )
@@ -135,30 +144,17 @@ function run(
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
   const stacked = options.stackedShapes
-  const firstPixel = new Int32Array(cache.seg!.regionCount).fill(-1)
-  if (stacked) {
-    let seen = 0
-    for (let i = 0; i < cache.seg!.labelMap.length && seen < cache.seg!.regionCount; i++) {
-      if (firstPixel[cache.seg!.labelMap[i]] === -1) {
-        firstPixel[cache.seg!.labelMap[i]] = i
-        seen++
-      }
-    }
-  }
   const paths = stage('fit', () => {
     // Each arc is fitted once, in its stored direction; the region that traverses it
     // backwards reuses the same cubics reversed exactly, so a shared boundary is the
-    // same curve on both sides by construction. Stacked mode keeps only each region's
-    // outer loop; the used-set guard skips arcs no kept loop references (in practice
-    // every arc is the inner side's outer loop, so this is purely defensive).
-    const used = stacked ? new Set<number>() : null
-    if (used)
-      cache.bounds!.regions.forEach((r, ri) => {
-        for (const ref of r.loops[cache.outerLoop![ri]]) used.add(ref.arc)
-      })
+    // same curve on both sides by construction.
     const arcCubics = cache.bounds!.arcs.map((a, i) =>
-      used && !used.has(i) ? [] : fitArc(a.points, cache.corners![i], a.closed, maxErrorPx),
+      fitArc(a.points, cache.corners![i], a.closed, maxErrorPx),
     )
+    // Stacked mode keeps only each region's outer loop and relies on the emission
+    // order: extractBoundaries yields regions by ascending first pixel, which is a
+    // valid containment (painter's) order — if A encloses B, A owns a pixel in a row
+    // above B's first. See the guarantee at the top of boundaries.ts.
     return cache.bounds!.regions.map((r, ri): RegionPath => {
       const keptLoops = stacked ? [r.loops[cache.outerLoop![ri]]] : r.loops
       const loops: Cubic[][] = keptLoops.map((refs) => {
@@ -171,7 +167,6 @@ function run(
       return {
         paletteIndex: cache.seg!.regionColor[r.region],
         area: cache.areas![ri],
-        stackOrder: firstPixel[r.region],
         loops,
       }
     })

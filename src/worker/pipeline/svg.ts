@@ -4,8 +4,24 @@ import type { Cubic } from './fitcurves'
 export interface RegionPath {
   paletteIndex: number
   area: number
-  stackOrder: number // row-major index of the region's first pixel; paint order in stacked mode
   loops: Cubic[][]
+}
+
+/**
+ * Index of the largest value, -1 when empty. Deliberately not
+ * `values.indexOf(Math.max(...values))`: the spread overflows the stack past
+ * ~100k arguments, and a halftone or dithered scan gives its background region
+ * hundreds of thousands of hole loops.
+ */
+export function maxIndex(values: number[]): number {
+  let max = -Infinity,
+    best = -1
+  for (let i = 0; i < values.length; i++)
+    if (values[i] > max) {
+      max = values[i]
+      best = i
+    }
+  return best
 }
 
 export function polygonArea(loop: Float64Array): number {
@@ -92,10 +108,11 @@ export function assembleSvg(
   height: number,
   opts: SvgOptions,
 ): string {
+  // Painter's order: stacked paths are emitted in the order given, each one solid and
+  // opaque over what precedes it. The caller supplies containment order (see vectorize).
   if (opts.stackedShapes) {
     const toPath = opts.optimize ? loopToPathCompact : loopToPath
-    const body = [...paths]
-      .sort((a, b) => a.stackOrder - b.stackOrder)
+    const body = paths
       .map((p) => {
         const fill = opts.colorOverrides?.[p.paletteIndex] ?? hex(palette.colors, p.paletteIndex)
         return `<path fill="${fill}" d="${p.loops.map(toPath).join('')}"/>`
@@ -115,7 +132,6 @@ export function assembleSvg(
         byColor.set(p.paletteIndex, {
           paletteIndex: p.paletteIndex,
           area: p.area,
-          stackOrder: p.stackOrder,
           loops: [...p.loops],
         })
     }
