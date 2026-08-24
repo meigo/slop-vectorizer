@@ -6,7 +6,7 @@
   import ImagePane from './lib/ImagePane.svelte'
   import { Viewport } from './lib/viewport.svelte'
   import { VectorizerClient } from './lib/workerClient'
-  import { fileToRasterImage } from './lib/decode'
+  import { fileToRasterImage, maxGapClosing } from './lib/decode'
   import { DEFAULT_OPTIONS, type ClientResult, type RasterImage, type StageName } from './types'
   import { remapOverrides } from './lib/paletteRemap'
 
@@ -18,7 +18,7 @@
   let fittedW = 0,
     fittedH = 0
   let sourceFile = $state<Blob | null>(null)
-  let upscale = $state<1 | 2 | 3>(1)
+  let scale = $state(1)
   let image = $state<RasterImage | null>(null)
   let result = $state<ClientResult | null>(null)
   let stage = $state<StageName | null>(null)
@@ -27,11 +27,11 @@
   let options = $state({ ...DEFAULT_OPTIONS })
   let debounce: ReturnType<typeof setTimeout> | undefined
   let lastPalette: number[] | null = null
-  let lastUpscale = 1
+  let lastScale = 1
   let preserveNextFraming = false
   // Original ×1 decode of the current file: the scale-invariant palette source.
   // Palette estimation always reads this, so swatch colors stay constant across
-  // upscale changes (re-estimating on resampled pixels drifts mid-gray clusters
+  // scale changes (re-estimating on resampled pixels drifts mid-gray clusters
   // and can flip auto-k). Plain let — it's a large buffer, no reactivity needed.
   let baseImage: RasterImage | null = null
 
@@ -63,7 +63,7 @@
   }
   $effect(() => {
     // fit on image-dimension change only, so pan/zoom survive slider drags —
-    // except an upscale re-decode with a deliberately framed view, which keeps
+    // except a scale re-decode with a deliberately framed view, which keeps
     // its exact framing (zoom/factor, pan unchanged) instead of refitting
     const img = displayImage
     if (!img || viewsW === 0) return
@@ -73,7 +73,7 @@
     fittedH = img.height
     if (preserveNextFraming && prevW > 0) {
       // Exact by construction: the ratio comes from the ACTUAL dimensions (the
-      // nominal upscale factor lies when the 4096px clamp or rounding kicks in).
+      // nominal scale factor lies when the 4096px clamp or rounding kicks in).
       viewport.zoom = viewport.zoom * (prevW / img.width)
       preserveNextFraming = false
     } else {
@@ -117,10 +117,10 @@
     result = null
     stage = null
     try {
-      const { image: img, downscaled } = await fileToRasterImage(file, upscale)
-      if (downscaled) notice = 'Large image was downscaled to 4096px'
+      const { image: img, clamped } = await fileToRasterImage(file, scale)
+      if (clamped) notice = 'Large image was downscaled to 4096px'
       image = img
-      if (upscale === 1) baseImage = img // ×1 decode = the palette source
+      if (scale === 1) baseImage = img // ×1 decode = the palette source
       result = await client.vectorize(
         img,
         $state.snapshot(options),
@@ -142,13 +142,14 @@
     void decodeAndRun(file)
   }
 
-  function handleUpscale() {
-    const factor = upscale / lastUpscale
-    lastUpscale = upscale
+  function handleScale() {
+    const factor = scale / lastScale
+    lastScale = scale
     // Gap closing is in working-image pixels; rescale it with the image so the
     // PHYSICAL bridge width is preserved (and round-trips: ×1 g=2 → ×2 g=4 → ×1
-    // g=2). A rescaled in-range value always stays within the new 3×upscale max.
-    options.gapClosing = Math.min(3 * upscale, Math.round(options.gapClosing * factor))
+    // g=2). Clamped anyway: downscaling rounds up as often as down (×1 g=3 → ×½
+    // g=2, whose cap is 2), and the cap floor of 1 can't hold a scaled-up value.
+    options.gapClosing = Math.min(maxGapClosing(scale), Math.round(options.gapClosing * factor))
     // Preserve the user's deliberate framing across the re-decode; the fit effect
     // computes the exact zoom ratio from the actual before/after dimensions.
     if (viewport.touched && image) preserveNextFraming = true
@@ -208,20 +209,20 @@
     <aside class="panel">
       <ControlsPanel
         bind:options
-        bind:upscale
+        bind:scale
         bind:mode
         {stats}
         svg={result?.svg ?? null}
         palette={result?.palette ?? null}
         {notice}
         onchange={rerun}
-        onupscale={handleUpscale}
+        onscale={handleScale}
         onfit={fit}
         onnew={() => {
           client.cancel()
           sourceFile = null
-          upscale = 1
-          lastUpscale = 1
+          scale = 1
+          lastScale = 1
           preserveNextFraming = false
           baseImage = null
           image = null

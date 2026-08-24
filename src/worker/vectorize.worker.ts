@@ -99,7 +99,7 @@ function run(
     cache.pre = identity ? image : stage('pre', () => preprocess(image, preOpts))
   const src = cache.pre
   // The palette comes from the scale-invariant source when one is cached, so a
-  // working-image change alone (upscale re-decode) does NOT re-estimate — swatch
+  // working-image change alone (scale re-decode) does NOT re-estimate — swatch
   // colors stay constant across scale changes by construction.
   const paletteDirty =
     !cache.palette ||

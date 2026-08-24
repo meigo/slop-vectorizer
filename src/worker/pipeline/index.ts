@@ -17,7 +17,7 @@ export function vectorize(
   image: RasterImage,
   options: PipelineOptions,
   onProgress?: (stage: StageName) => void,
-  // Scale-invariant palette source (e.g. the original ×1 decode of an upscaled
+  // Scale-invariant palette source (e.g. the original ×1 decode of a rescaled
   // working image); when given, palette estimation reads it — with the same
   // pre-effects applied — instead of the working image.
   paletteImage?: RasterImage,

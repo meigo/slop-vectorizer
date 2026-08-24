@@ -3,29 +3,30 @@
   import { Moon, Sun, Columns2, SquareSplitHorizontal, Maximize } from '@lucide/svelte'
   import { theme } from './theme.svelte'
   import type { PipelineOptions, PipelineStats } from '../types'
+  import { maxGapClosing } from './decode'
 
   let {
     options = $bindable(),
-    upscale = $bindable(),
+    scale = $bindable(),
     mode = $bindable(),
     stats,
     svg,
     palette,
     notice,
     onchange,
-    onupscale,
+    onscale,
     onfit,
     onnew,
   }: {
     options: PipelineOptions
-    upscale: 1 | 2 | 3
+    scale: number
     mode: 'side' | 'split'
     stats: PipelineStats | null
     svg: string | null
     palette: number[] | null
     notice: string | null
     onchange: () => void
-    onupscale: () => void
+    onscale: () => void
     onfit: () => void
     onnew: () => void
   } = $props()
@@ -152,13 +153,13 @@
         oninput={onchange}
       />
     </label>
-    <!-- Max scales with upscale: gaps span upscale× more pixels, so the cap keeps
-         the same ~6px physical bridge limit at native scale. -->
+    <!-- Max scales with the working image: gaps span scale× more pixels, so the
+         cap keeps the same ~6px physical bridge limit at native scale. -->
     <label
       >Gap closing <input
         type="range"
         min="0"
-        max={3 * upscale}
+        max={maxGapClosing(scale)}
         step="1"
         bind:value={options.gapClosing}
         oninput={onchange}
@@ -168,10 +169,14 @@
 
   <section>
     <div class="label">Input</div>
+    <!-- Below ×1 the resampler averages away paper texture and pixel noise, which
+         yields smoother shapes and fewer boundary points; above ×1 it gives thin
+         strokes more pixels to survive segmentation. -->
     <label>
-      Upscale
-      <select bind:value={upscale} onchange={onupscale}>
-        <option value={1}>×1</option><option value={2}>×2</option><option value={3}>×3</option>
+      Scale
+      <select bind:value={scale} onchange={onscale}>
+        <option value={1 / 3}>×⅓</option><option value={0.5}>×½</option><option value={1}>×1</option
+        ><option value={2}>×2</option><option value={3}>×3</option>
       </select>
     </label>
     <label
