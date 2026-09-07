@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Declaring both means no browser falls back to requesting /favicon.ico: SVG where supported
+         (it follows the OS theme through a rule inside the file), PNG elsewhere — Safari ignores
+         SVG favicons entirely. Both are generated from public/favicon.svg by tools/make-icons.mjs. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>slop-vectorizer — image to SVG vectorizer in your browser</title>
     <meta
