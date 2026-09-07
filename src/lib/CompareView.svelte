@@ -2,16 +2,16 @@
 <script lang="ts">
   import type { RasterImage } from '../types'
   import type { Viewport } from './viewport.svelte'
+  import { pinchStep, type Point } from './viewportMath'
 
   let { image, svg, viewport }: { image: RasterImage; svg: string; viewport: Viewport } = $props()
 
   let divider = $state(50) // percent
   let container: HTMLDivElement
   let canvas = $state<HTMLCanvasElement | null>(null)
-  let panning = false
+  // Active touches/pointers by id: one pans, two pinch-zoom.
+  const pointers = new Map<number, Point>()
   let draggingDivider = false
-  let lastX = 0,
-    lastY = 0
 
   $effect(() => {
     if (!canvas) return
@@ -31,23 +31,31 @@
     viewport.wheelAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY)
   }
   function down(e: PointerEvent) {
-    panning = true
-    lastX = e.clientX
-    lastY = e.clientY
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     ;(e.target as Element).setPointerCapture(e.pointerId)
   }
   function move(e: PointerEvent) {
     if (draggingDivider) {
       const rect = container.getBoundingClientRect()
       divider = Math.min(98, Math.max(2, ((e.clientX - rect.left) / rect.width) * 100))
-    } else if (panning) {
-      viewport.panBy(e.clientX - lastX, e.clientY - lastY)
-      lastX = e.clientX
-      lastY = e.clientY
+      return
     }
+    const prev = pointers.get(e.pointerId)
+    if (!prev) return
+    const cur = { x: e.clientX, y: e.clientY }
+    if (pointers.size === 1) {
+      viewport.panBy(cur.x - prev.x, cur.y - prev.y)
+    } else if (pointers.size === 2) {
+      const other = [...pointers.entries()].find(([id]) => id !== e.pointerId)![1]
+      const s = pinchStep(prev, other, cur, other)
+      const r = container.getBoundingClientRect()
+      viewport.zoomAt(s.cx - r.left, s.cy - r.top, s.factor)
+      viewport.panBy(s.dx, s.dy)
+    }
+    pointers.set(e.pointerId, cur)
   }
-  function up() {
-    panning = false
+  function up(e: PointerEvent) {
+    pointers.delete(e.pointerId)
     draggingDivider = false
   }
 </script>
@@ -59,6 +67,7 @@
   onpointerdown={down}
   onpointermove={move}
   onpointerup={up}
+  onpointercancel={up}
   role="img"
   aria-label="Compare original and vectorized"
 >

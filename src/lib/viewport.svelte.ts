@@ -8,8 +8,12 @@ export class Viewport {
   touched = $state(false)
 
   wheelAt(cx: number, cy: number, deltaY: number): void {
+    this.zoomAt(cx, cy, Math.exp(-deltaY * 0.002))
+  }
+
+  // Multiply zoom by factor, keeping the image point under (cx, cy) fixed.
+  zoomAt(cx: number, cy: number, factor: number): void {
     this.touched = true
-    const factor = Math.exp(-deltaY * 0.002)
     const next = Math.min(64, Math.max(0.1, this.zoom * factor))
     this.panX = cx - (cx - this.panX) * (next / this.zoom)
     this.panY = cy - (cy - this.panY) * (next / this.zoom)

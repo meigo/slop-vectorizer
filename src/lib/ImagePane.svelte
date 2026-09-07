@@ -2,6 +2,7 @@
 <script lang="ts">
   import type { RasterImage } from '../types'
   import type { Viewport } from './viewport.svelte'
+  import { pinchStep, type Point } from './viewportMath'
 
   let {
     image = null,
@@ -17,9 +18,8 @@
 
   let el: HTMLDivElement
   let canvas = $state<HTMLCanvasElement | null>(null)
-  let panning = false,
-    lastX = 0,
-    lastY = 0
+  // Active touches/pointers by id: one pans, two pinch-zoom.
+  const pointers = new Map<number, Point>()
 
   $effect(() => {
     if (!canvas || !image) return
@@ -40,19 +40,26 @@
     viewport.wheelAt(e.clientX - r.left, e.clientY - r.top, e.deltaY)
   }
   function down(e: PointerEvent) {
-    panning = true
-    lastX = e.clientX
-    lastY = e.clientY
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     ;(e.target as Element).setPointerCapture(e.pointerId)
   }
   function move(e: PointerEvent) {
-    if (!panning) return
-    viewport.panBy(e.clientX - lastX, e.clientY - lastY)
-    lastX = e.clientX
-    lastY = e.clientY
+    const prev = pointers.get(e.pointerId)
+    if (!prev) return
+    const cur = { x: e.clientX, y: e.clientY }
+    if (pointers.size === 1) {
+      viewport.panBy(cur.x - prev.x, cur.y - prev.y)
+    } else if (pointers.size === 2) {
+      const other = [...pointers.entries()].find(([id]) => id !== e.pointerId)![1]
+      const s = pinchStep(prev, other, cur, other)
+      const r = el.getBoundingClientRect()
+      viewport.zoomAt(s.cx - r.left, s.cy - r.top, s.factor)
+      viewport.panBy(s.dx, s.dy)
+    }
+    pointers.set(e.pointerId, cur)
   }
-  function up() {
-    panning = false
+  function up(e: PointerEvent) {
+    pointers.delete(e.pointerId)
   }
 </script>
 
@@ -63,6 +70,7 @@
   onpointerdown={down}
   onpointermove={move}
   onpointerup={up}
+  onpointercancel={up}
   role="img"
   aria-label={label}
 >
