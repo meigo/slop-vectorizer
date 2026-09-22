@@ -42,6 +42,13 @@ const f = (v: number) => {
 const hex = (c: Uint8ClampedArray, i: number) =>
   '#' + [c[3 * i], c[3 * i + 1], c[3 * i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+
+/** colorOverrides can come from a loaded project file (untrusted) and is interpolated
+ *  unescaped into a `fill="..."` attribute — never trust it past this point. */
+const overrideFill = (override: string | null | undefined, palette: Palette, i: number): string =>
+  override && HEX_COLOR.test(override) ? override : hex(palette.colors, i)
+
 function loopToPath(loop: Cubic[]): string {
   if (loop.length === 0) return ''
   let d = `M${f(loop[0][0])} ${f(loop[0][1])}`
@@ -114,7 +121,7 @@ export function assembleSvg(
     const toPath = opts.optimize ? loopToPathCompact : loopToPath
     const body = paths
       .map((p) => {
-        const fill = opts.colorOverrides?.[p.paletteIndex] ?? hex(palette.colors, p.paletteIndex)
+        const fill = overrideFill(opts.colorOverrides?.[p.paletteIndex], palette, p.paletteIndex)
         return `<path fill="${fill}" d="${p.loops.map(toPath).join('')}"/>`
       })
       .join('\n  ')
@@ -147,7 +154,7 @@ export function assembleSvg(
   const body = items
     .sort((a, b) => b.area - a.area)
     .map((p) => {
-      const fill = opts.colorOverrides?.[p.paletteIndex] ?? hex(palette.colors, p.paletteIndex)
+      const fill = overrideFill(opts.colorOverrides?.[p.paletteIndex], palette, p.paletteIndex)
       return `<path fill="${fill}" fill-rule="evenodd" d="${p.loops.map(toPath).join('')}"/>`
     })
     .join('\n  ')

@@ -98,6 +98,33 @@ describe('compatibility', () => {
     expect(back.localSaved).toEqual(circle)
   })
 
+  it('sanitises colorOverrides so only clean #rrggbb entries survive', async () => {
+    const malicious = 'x"/><img src=x onerror=alert(1)><path fill="y'
+    const back = await unpackProject(
+      zipOf({
+        app: 'slop-vectorizer',
+        version: 1,
+        sourceName: 'x.png',
+        scale: 1,
+        options: { colorOverrides: [malicious, '#00ff00', 42] },
+      }),
+    )
+    expect(back.options.colorOverrides).toEqual([null, '#00ff00', null])
+  })
+
+  it('falls back to default options when options is not a plain object', async () => {
+    const back = await unpackProject(
+      zipOf({
+        app: 'slop-vectorizer',
+        version: 1,
+        sourceName: 'x.png',
+        scale: 1,
+        options: 'not-an-object',
+      }),
+    )
+    expect(back.options).toEqual(DEFAULT_OPTIONS)
+  })
+
   it('rejects a newer version, a foreign zip and damaged bytes', async () => {
     await expect(
       unpackProject(zipOf({ app: 'slop-vectorizer', version: 2, sourceName: 'x.png' })),

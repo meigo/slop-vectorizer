@@ -36,6 +36,15 @@ const EXT_MIME: Record<string, string> = {
 
 const baseName = (name: string | undefined) => (name ?? '').replace(/\.[^./\\]*$/, '').trim()
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+
+/** A project file is untrusted input: keep only entries that are clean `#rrggbb` strings,
+ *  since this array flows straight into an SVG `fill` attribute rendered via `{@html}`. */
+function sanitizeColorOverrides(v: unknown): (string | null)[] | null {
+  if (!Array.isArray(v)) return null
+  return v.map((c) => (typeof c === 'string' && HEX_COLOR.test(c) ? c : null))
+}
+
 /** `logo.png` → `logo.vectorizer.zip`; distinct from the `logo.svg` the same session exports. */
 export function projectFileName(sourceName: string | undefined): string {
   return (baseName(sourceName) || 'vectorized') + '.vectorizer.zip'
@@ -64,10 +73,19 @@ export async function packProject(d: ProjectData): Promise<Blob> {
   return new Blob([zip], { type: 'application/zip' })
 }
 
+// A project zip only ever holds these two entries; skip anything else so a crafted zip
+// can't make unzipSync inflate arbitrary extra members, and cap the declared size of what
+// it does inflate (256 MB: comfortably above any real source image or settings blob).
+const MAX_ENTRY_SIZE = 256 * 1024 * 1024
+
 export async function unpackProject(zip: Blob): Promise<ProjectData> {
   let entries: Record<string, Uint8Array>
   try {
-    entries = unzipSync(new Uint8Array(await zip.arrayBuffer()))
+    entries = unzipSync(new Uint8Array(await zip.arrayBuffer()), {
+      filter: (f) =>
+        (f.name === 'project.json' || f.name.startsWith('source.')) &&
+        f.originalSize <= MAX_ENTRY_SIZE,
+    })
   } catch {
     throw new Error('That file is damaged or not a zip.')
   }
@@ -91,9 +109,19 @@ export async function unpackProject(zip: Blob): Promise<ProjectData> {
   const source = new Blob([new Uint8Array(entries[name])], { type: EXT_MIME[ext] ?? '' })
 
   // Unknown keys are ignored and missing ones default, so older projects keep opening as the
-  // app gains options.
-  const saved = (parsed.options ?? {}) as Partial<PipelineOptions>
-  const options: PipelineOptions = { ...DEFAULT_OPTIONS, ...saved }
+  // app gains options. The project file is untrusted input, so it's validated rather than
+  // trusted wholesale: a malformed `options` falls back to {}, and colorOverrides — the one
+  // field that reaches {@html} output via assembleSvg — is sanitised to clean hex colors only.
+  const rawOptions = parsed.options
+  const saved: Partial<PipelineOptions> =
+    typeof rawOptions === 'object' && rawOptions !== null && !Array.isArray(rawOptions)
+      ? (rawOptions as Partial<PipelineOptions>)
+      : {}
+  const options: PipelineOptions = {
+    ...DEFAULT_OPTIONS,
+    ...saved,
+    colorOverrides: sanitizeColorOverrides(saved.colorOverrides),
+  }
   const localSaved =
     (parsed.localSaved as LocalLevels | null | undefined) ?? options.localLevels ?? null
   return {

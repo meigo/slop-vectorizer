@@ -147,6 +147,21 @@ describe('svg assembly', () => {
     expect(paths(b)).toEqual(paths(a))
   })
 
+  it('colorOverrides ignores anything that is not a clean #rrggbb color', () => {
+    const malicious = 'x"/><img src=x onerror=alert(1)><path fill="y'
+    const opts = {
+      mergePaths: false,
+      transparentBg: false,
+      optimize: false,
+      colorOverrides: [null, malicious],
+      stackedShapes: false,
+    }
+    const svg = assembleSvg([square, bg], palette, 20, 20, opts)
+    expect(svg).not.toContain('<img')
+    expect(svg).toContain('fill="#c81e1e"') // square (index 1) falls back to its palette hex
+    expect(svg.match(/"/g)!.length % 2).toBe(0) // no stray quote breaking out of an attribute
+  })
+
   it('short or absent override arrays are no-ops', () => {
     const base = {
       mergePaths: false,
