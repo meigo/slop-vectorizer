@@ -121,12 +121,9 @@ export interface GizmoHit {
 /** Which circle a pointer grabs, and where. The SELECTED circle's ring handles ('inner' /
  *  'outer') are tried first, so an overlapping neighbour drawn on top can never steal them —
  *  the rings of the circle being edited must stay reachable. Its centre dot and interior get no
- *  such priority: where circles coincide, a dot or interior click goes to whichever is visibly
- *  on top, same as any other overlap — otherwise two circles sharing a centre could never select
- *  the top one by clicking it. Failing a ring match, the rest are scanned from the top of the
- *  stack down (their dot, rings and interior all count); if none of them match either, the
- *  selected circle's own dot/interior hit (if any) is used last, so dragging inside it still
- *  moves it instead of falling through to a pane pan. Hidden circles are transparent. */
+ *  such priority: a single top-down scan over ALL circles (selected included) decides those, so
+ *  whichever circle is visibly on top wins a dot/interior click, same as any other overlap —
+ *  including when the selected circle is itself the topmost one. Hidden circles are transparent. */
 export function hitTestList(
   circles: LocalCircle[],
   selected: number,
@@ -147,11 +144,10 @@ export function hitTestList(
   const handle = selected >= 0 ? test(selected) : null
   if (handle && handle.part !== 'move') return handle
   for (let i = circles.length - 1; i >= 0; i--) {
-    if (i === selected) continue
     const h = test(i)
     if (h) return h
   }
-  return handle
+  return null
 }
 
 /** Hover cursor: move for the centre, a resize arrow pointing along the radius for a ring. */

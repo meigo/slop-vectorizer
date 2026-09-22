@@ -157,6 +157,13 @@ describe('hitTestList', () => {
     // own centre dot, which is not a ring handle) still goes to the topmost circle
     expect(hit([A, over], 0, 50 + 10, 50)).toEqual({ index: 1, part: 'move' })
   })
+  it('keeps the selected circle on top when its interior overlaps an older circle beneath it', () => {
+    // `old` is already in place; `topSelected` is added after it (last in the list, topmost)
+    // and selected, with its centre sitting inside `old`'s interior.
+    const old: LocalCircle = { ...base, cx: 0.25, cy: 0.5, inner: 0.3, outer: 0.4 }
+    const topSelected: LocalCircle = { ...base, cx: 0.35, cy: 0.5, inner: 0.05, outer: 0.1 }
+    expect(hit([old, topSelected], 1, 70, 50)).toEqual({ index: 1, part: 'move' })
+  })
   it('ignores hidden circles', () => {
     expect(hit([{ ...A, hidden: true }, B], 1, 50, 50)).toBe(null)
   })
