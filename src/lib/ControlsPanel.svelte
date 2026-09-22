@@ -153,6 +153,8 @@
       {max}
       step="1"
       value={c[key]}
+      disabled={c.hidden}
+      title={c.hidden ? 'Unhide the circle to edit its levels' : undefined}
       style={sliderFill(c[key], min, max)}
       oninput={(e) =>
         oncircle(selected, { ...c, [key]: Number((e.target as HTMLInputElement).value) })}

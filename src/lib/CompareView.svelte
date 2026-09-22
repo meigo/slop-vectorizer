@@ -33,6 +33,13 @@
     oncircle?: (i: number, c: LocalCircle) => void
   } = $props()
 
+  // Render order: list order, with the selected circle's index moved to the end so its
+  // overlay paints on top of a later unselected one — data order (circles/oncircle
+  // indices) is untouched.
+  const circleDrawOrder = $derived(
+    circles.map((_, i) => i).sort((a, b) => (a === selected ? 1 : 0) - (b === selected ? 1 : 0)),
+  )
+
   let divider = $state(50) // percent
   let container: HTMLDivElement
   let canvas = $state<HTMLCanvasElement | null>(null)
@@ -194,7 +201,11 @@
     </div>
   </div>
   {#if size}
-    {#each circles as c, i (i)}
+    <!-- Selected circle's overlay drawn last (on top), so what you click and what you see
+         agree with hitTestList's priority for the selected circle's rings — data order
+         (circles/oncircle indices) is untouched. -->
+    {#each circleDrawOrder as i (i)}
+      {@const c = circles[i]}
       <LocalGizmo
         c={toScreen(c, size.width, size.height, viewport)}
         state={c.hidden ? 'hidden' : i === selected ? 'selected' : 'unselected'}
