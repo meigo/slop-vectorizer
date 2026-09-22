@@ -129,7 +129,7 @@ function run(
           : (cache.palPre ??= preprocess(palBase, palOpts))
         : // No distinct palette source: fall back to the working image, but still strip the
           // circles when any are set — the palette never sees local levels.
-          options.localCircles.length > 0
+          effectiveCircles(options).length > 0
           ? palIdentity
             ? image
             : preprocess(image, palOpts)

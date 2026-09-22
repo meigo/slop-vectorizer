@@ -5,7 +5,13 @@ import type {
   VectorResult,
   PipelineStats,
 } from '../../types'
-import { preprocess, isIdentityPre, globalPre, type PreOptions } from './preprocess'
+import {
+  preprocess,
+  isIdentityPre,
+  globalPre,
+  effectiveCircles,
+  type PreOptions,
+} from './preprocess'
 import { estimatePalette } from './palette'
 import { segmentImage } from './segment'
 import { extractBoundaries, loopPointsOf } from './boundaries'
@@ -48,7 +54,7 @@ export function vectorize(
         : preprocess(paletteImage, palOpts)
       : // No distinct palette source: fall back to the working image, but still strip the
         // circles when any are set — the palette never sees local levels.
-        options.localCircles.length > 0
+        effectiveCircles(options).length > 0
         ? isIdentityPre(palOpts)
           ? image
           : preprocess(image, palOpts)
