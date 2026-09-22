@@ -26,6 +26,14 @@
     writeSvgFile,
   } from './lib/saveFile'
   import { packProject, projectFileName, unpackProject } from './lib/project'
+  import {
+    getAutosave,
+    makeThumb,
+    putAutosave,
+    SaveGeneration,
+    type AutosaveRecord,
+  } from './lib/autosave'
+  import ContinueCard from './lib/ContinueCard.svelte'
 
   const client = new VectorizerClient()
   const viewport = new Viewport()
@@ -203,6 +211,42 @@
     }
   }
 
+  // Autosave: one slot, written ~1s after the last change and only once a result has arrived, so
+  // it never competes with the pipeline. New image never clears it — the next load replaces it.
+  const autosaveGen = new SaveGeneration()
+  let autosaveTimer: ReturnType<typeof setTimeout> | undefined
+  let resumable = $state<AutosaveRecord | null>(null)
+
+  function scheduleAutosave() {
+    clearTimeout(autosaveTimer)
+    autosaveTimer = setTimeout(() => void writeAutosave(), 1000)
+  }
+
+  async function writeAutosave() {
+    const d = projectData()
+    const img = image
+    if (!d || !img) return
+    const gen = autosaveGen.bump()
+    try {
+      const [zip, thumb] = await Promise.all([packProject(d), makeThumb($state.snapshot(img))])
+      if (!autosaveGen.isCurrent(gen)) return // superseded by a newer write
+      await putAutosave({ zip, sourceName: d.sourceName, thumb, savedAt: Date.now() })
+    } catch {
+      // Autosave is best-effort; a failure must never interrupt the session.
+    }
+  }
+
+  async function resume() {
+    const rec = resumable
+    if (!rec) return
+    resumable = null
+    await openProject(new File([rec.zip], 'autosave.zip', { type: 'application/zip' }))
+  }
+
+  $effect(() => {
+    void getAutosave().then((rec) => (resumable = rec))
+  })
+
   const stats = $derived(result?.stats ?? null)
   // Compare view shows the preprocessed bitmap (levels/blur/saturation applied) when
   // the pipeline produced one, so pre-effect sliders are visible on the LEFT side —
@@ -299,6 +343,7 @@
         baseImage ?? undefined,
       )
       stage = null
+      scheduleAutosave()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       if (msg === 'cancelled') return // superseded by a newer call; let that call own the UI state
@@ -354,6 +399,7 @@
           (s) => (stage = s),
         )
         stage = null
+        scheduleAutosave()
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         if (msg === 'cancelled') return // superseded by a newer call; let that call own the UI state
@@ -372,6 +418,7 @@
         Turn logos, sketches, and flat art into clean SVG — with sub-pixel edge recovery, entirely
         in your browser. Nothing is uploaded.
       </p>
+      {#if resumable}<ContinueCard rec={resumable} onopen={resume} />{/if}
       <Dropzone onfile={handleFile} {error} />
     </div>
   </main>
