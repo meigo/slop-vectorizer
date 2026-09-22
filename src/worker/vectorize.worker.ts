@@ -14,6 +14,7 @@ import {
   isIdentityPre,
   globalPre,
   sameLocalLevels,
+  effectiveLocal,
   type PreOptions,
 } from './pipeline/preprocess'
 import { estimatePalette } from './pipeline/palette'
@@ -37,7 +38,7 @@ export function firstDirtyStage(
     prev.blurRadius !== next.blurRadius ||
     prev.saturation !== next.saturation ||
     prev.flatten !== next.flatten ||
-    !sameLocalLevels(prev.localLevels, next.localLevels)
+    !sameLocalLevels(effectiveLocal(prev), effectiveLocal(next))
   )
     return 'pre'
   if (prev.colorCount !== next.colorCount) return 'palette'

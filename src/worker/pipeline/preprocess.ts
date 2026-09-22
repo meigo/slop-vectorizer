@@ -18,10 +18,20 @@ export const IDENTITY_PRE: PreOptions = {
   localLevels: null,
 }
 
-/** A circle whose points equal the global ones changes nothing. */
-function localIsNoop(o: PreOptions): boolean {
+/** The circle that actually affects the pixels: null when there is none, or its points equal
+ *  the global ones (in which case it changes nothing and is a no-op). */
+export function effectiveLocal(o: {
+  blackPoint: number
+  whitePoint: number
+  localLevels: LocalLevels | null
+}): LocalLevels | null {
   const l = o.localLevels
-  return !l || (l.blackPoint === o.blackPoint && l.whitePoint === o.whitePoint)
+  if (!l || (l.blackPoint === o.blackPoint && l.whitePoint === o.whitePoint)) return null
+  return l
+}
+
+function localIsNoop(o: PreOptions): boolean {
+  return effectiveLocal(o) === null
 }
 
 export function isIdentityPre(o: PreOptions): boolean {

@@ -42,6 +42,26 @@ describe('firstDirtyStage', () => {
     const on = { ...base, localLevels: circle }
     expect(firstDirtyStage(on, { ...on, localLevels: { ...circle } }, true)).toBe('fit')
   })
+  describe('effective circle (points vs. the global ones)', () => {
+    // Same points as base's global blackPoint/whitePoint (0, 255): a no-op circle.
+    const noop = { ...circle, blackPoint: base.blackPoint, whitePoint: base.whitePoint }
+    it('moving a circle whose points equal the global ones does not dirty pre', () => {
+      const on = { ...base, localLevels: noop }
+      expect(firstDirtyStage(on, { ...on, localLevels: { ...noop, cx: 0.6 } }, true)).toBe('fit')
+    })
+    it('moving a circle with different points -> pre', () => {
+      const on = { ...base, localLevels: circle }
+      expect(firstDirtyStage(on, { ...on, localLevels: { ...circle, cx: 0.6 } }, true)).toBe('pre')
+    })
+    it('turning an effective circle off -> pre', () => {
+      const on = { ...base, localLevels: circle }
+      expect(firstDirtyStage(on, { ...on, localLevels: null }, true)).toBe('pre')
+    })
+    it('turning a no-op circle off does not dirty pre', () => {
+      const on = { ...base, localLevels: noop }
+      expect(firstDirtyStage(on, { ...on, localLevels: null }, true)).toBe('fit')
+    })
+  })
 })
 
 describe('sameImageData', () => {
