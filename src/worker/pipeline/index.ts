@@ -46,7 +46,13 @@ export function vectorize(
       ? isIdentityPre(palOpts)
         ? paletteImage
         : preprocess(paletteImage, palOpts)
-      : src
+      : // No distinct palette source: fall back to the working image, but still strip the
+        // circle when one is set — the palette never sees local levels.
+        options.localLevels
+        ? isIdentityPre(palOpts)
+          ? image
+          : preprocess(image, palOpts)
+        : src
     return estimatePalette(palInput, options.colorCount)
   })
   const seg = stage('segment', () =>

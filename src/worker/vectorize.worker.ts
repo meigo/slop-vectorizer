@@ -126,7 +126,13 @@ function run(
         ? palIdentity
           ? palBase
           : (cache.palPre ??= preprocess(palBase, palOpts))
-        : src
+        : // No distinct palette source: fall back to the working image, but still strip the
+          // circle when one is set — the palette never sees local levels.
+          options.localLevels
+          ? palIdentity
+            ? image
+            : preprocess(image, palOpts)
+          : src
       return estimatePalette(palInput, options.colorCount)
     })
   if (fromIdx <= ORDER.indexOf('segment') || !cache.seg)
