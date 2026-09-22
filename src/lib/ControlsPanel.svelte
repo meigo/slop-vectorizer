@@ -3,6 +3,7 @@
   import { Columns2, SquareSplitHorizontal, Maximize } from '@lucide/svelte'
   import type { LocalLevels, PipelineOptions, PipelineStats } from '../types'
   import { maxGapClosing } from './decode'
+  import FileMenu from './FileMenu.svelte'
   import { sliderFill } from './sliderFill'
 
   type SliderKey =
@@ -29,12 +30,14 @@
     canSaveAs,
     saveStatus,
     projectSavedName,
+    mod,
     localOn,
     local,
     onchange,
     onscale,
     onfit,
     onnew,
+    onopen,
     onsave,
     onsaveproject,
     ontogglelocal,
@@ -57,6 +60,8 @@
     saveStatus: string | null
     /** The file Save project overwrites, after a first save; null = it asks where. */
     projectSavedName: string | null
+    /** '⌘' or 'Ctrl+', for the menu's shortcut hints. */
+    mod: string
     localOn: boolean
     /** The remembered circle; kept while off so re-enabling restores it. */
     local: LocalLevels | null
@@ -64,6 +69,7 @@
     onscale: () => void
     onfit: () => void
     onnew: () => void
+    onopen: () => void
     onsave: (asNew: boolean) => void
     onsaveproject: (asNew: boolean) => void
     ontogglelocal: () => void
@@ -145,7 +151,16 @@
 <div class="cp">
   <header class="top">
     <strong>slop-vectorizer</strong>
-    <button onclick={onnew}>New image</button>
+    <FileMenu
+      canNew={!!svg}
+      canSaveProject={!!svg}
+      {projectSavedName}
+      {canSaveAs}
+      {mod}
+      {onnew}
+      {onopen}
+      {onsaveproject}
+    />
   </header>
 
   <section>
@@ -337,19 +352,6 @@
         <button onclick={() => onsave(true)} disabled={!svg}>Save as…</button>
       {/if}
     </div>
-    <div class="save-buttons project">
-      <button
-        class="grow"
-        onclick={() => onsaveproject(false)}
-        disabled={!svg}
-        title={projectSavedName
-          ? `Overwrite ${projectSavedName}`
-          : 'Save the image and all settings'}>Save project</button
-      >
-      {#if canSaveAs && projectSavedName}
-        <button onclick={() => onsaveproject(true)} disabled={!svg}>Save as…</button>
-      {/if}
-    </div>
     {#if savedName}<p class="hint">Saves over {savedName}</p>{/if}
     {#if saveStatus}<p class="hint" role="status">{saveStatus}</p>{/if}
   </div>
@@ -498,9 +500,6 @@
   .save-buttons {
     display: flex;
     gap: 6px;
-  }
-  .save-buttons.project {
-    margin-top: 6px;
   }
   .grow {
     flex: 1;

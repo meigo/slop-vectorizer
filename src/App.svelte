@@ -18,6 +18,7 @@
   } from './types'
   import { remapOverrides } from './lib/paletteRemap'
   import { saveToFilesAvailable } from './lib/share'
+  import { commandFor, isTypingTarget } from './lib/shortcuts'
   import {
     deliverFile,
     errorMessage,
@@ -151,6 +152,33 @@
       options: $state.snapshot(options),
       localSaved: localSaved ? $state.snapshot(localSaved) : null,
     }
+  }
+
+  // File menu: Open project… reaches the same path as dropping a zip on the start screen.
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+  const mod = isMac ? '\u2318' : 'Ctrl+'
+  let projectInput: HTMLInputElement
+
+  function openProjectPicker() {
+    projectInput.click()
+  }
+  function projectPicked() {
+    const f = projectInput.files?.[0]
+    if (f) void openProject(f)
+    projectInput.value = ''
+  }
+  function shortcut(e: KeyboardEvent) {
+    if (isTypingTarget(e.target)) return
+    const cmd = commandFor(e)
+    if (!cmd) return
+    if (cmd === 'open') {
+      e.preventDefault()
+      openProjectPicker()
+      return
+    }
+    if (!result?.svg) return // nothing to save yet; leave the key to the browser
+    e.preventDefault()
+    void save(cmd === 'saveAs')
   }
 
   async function saveProject(asNew: boolean) {
@@ -432,6 +460,15 @@
   }
 </script>
 
+<svelte:window onkeydown={shortcut} />
+<input
+  type="file"
+  accept=".zip,application/zip"
+  hidden
+  bind:this={projectInput}
+  onchange={projectPicked}
+/>
+
 {#if !image}
   <main class="empty">
     <div class="intro">
@@ -491,6 +528,8 @@
         {canSaveAs}
         {saveStatus}
         {projectSavedName}
+        {mod}
+        onopen={openProjectPicker}
         {localOn}
         local={localSaved}
         ontogglelocal={toggleLocal}
