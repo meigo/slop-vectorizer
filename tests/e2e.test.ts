@@ -298,7 +298,17 @@ describe('vectorize round-trip', () => {
       img,
       {
         ...DEFAULT_OPTIONS,
-        localLevels: { cx: 0.5, cy: 0.5, inner: 0.2, outer: 0.3, blackPoint: 120, whitePoint: 200 },
+        localCircles: [
+          {
+            cx: 0.5,
+            cy: 0.5,
+            inner: 0.2,
+            outer: 0.3,
+            blackPoint: 120,
+            whitePoint: 200,
+            hidden: false,
+          },
+        ],
       },
       undefined,
       img,
@@ -312,7 +322,17 @@ describe('vectorize round-trip', () => {
     const plain = vectorize(img, DEFAULT_OPTIONS)
     const local = vectorize(img, {
       ...DEFAULT_OPTIONS,
-      localLevels: { cx: 0.5, cy: 0.5, inner: 0.2, outer: 0.3, blackPoint: 120, whitePoint: 200 },
+      localCircles: [
+        {
+          cx: 0.5,
+          cy: 0.5,
+          inner: 0.2,
+          outer: 0.3,
+          blackPoint: 120,
+          whitePoint: 200,
+          hidden: false,
+        },
+      ],
     })
     expect(fills(local.svg)).toEqual(fills(plain.svg))
   })

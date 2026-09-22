@@ -3,7 +3,15 @@ import { packProject, projectFileName, unpackProject, type ProjectData } from '.
 import { DEFAULT_OPTIONS } from '../src/types'
 import { unzipSync, zipSync, strToU8 } from 'fflate'
 
-const circle = { cx: 0.4, cy: 0.6, inner: 0.1, outer: 0.2, blackPoint: 30, whitePoint: 220 }
+const circle = {
+  cx: 0.4,
+  cy: 0.6,
+  inner: 0.1,
+  outer: 0.2,
+  blackPoint: 30,
+  whitePoint: 220,
+  hidden: false,
+}
 const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4])
 
 function data(over: Partial<ProjectData> = {}): ProjectData {
@@ -15,7 +23,7 @@ function data(over: Partial<ProjectData> = {}): ProjectData {
       ...DEFAULT_OPTIONS,
       colorCount: 5,
       colorOverrides: ['#ff0000'],
-      localLevels: circle,
+      localCircles: [circle],
     },
     localSaved: circle,
     ...over,
@@ -92,7 +100,7 @@ describe('compatibility', () => {
         version: 1,
         sourceName: 'x.png',
         scale: 1,
-        options: { localLevels: circle },
+        options: { localCircles: [circle] },
       }),
     )
     expect(back.localSaved).toEqual(circle)

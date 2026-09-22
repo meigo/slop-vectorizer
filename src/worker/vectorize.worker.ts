@@ -13,8 +13,8 @@ import {
   preprocess,
   isIdentityPre,
   globalPre,
-  sameLocalLevels,
-  effectiveLocal,
+  sameCircleList,
+  effectiveCircles,
   type PreOptions,
 } from './pipeline/preprocess'
 import { estimatePalette } from './pipeline/palette'
@@ -38,7 +38,7 @@ export function firstDirtyStage(
     prev.blurRadius !== next.blurRadius ||
     prev.saturation !== next.saturation ||
     prev.flatten !== next.flatten ||
-    !sameLocalLevels(effectiveLocal(prev), effectiveLocal(next))
+    !sameCircleList(effectiveCircles(prev), effectiveCircles(next))
   )
     return 'pre'
   if (prev.colorCount !== next.colorCount) return 'palette'
@@ -93,10 +93,10 @@ function run(
     blurRadius: options.blurRadius,
     saturation: options.saturation,
     flatten: options.flatten,
-    localLevels: options.localLevels,
+    localCircles: options.localCircles,
   }
   const identity = isIdentityPre(preOpts)
-  // The palette never sees the local circle (spec: palette ignores local levels).
+  // The palette never sees local circles (spec: palette ignores local levels).
   const palOpts = globalPre(preOpts)
   const palIdentity = isIdentityPre(palOpts)
   const preFieldsChanged =
@@ -128,8 +128,8 @@ function run(
           ? palBase
           : (cache.palPre ??= preprocess(palBase, palOpts))
         : // No distinct palette source: fall back to the working image, but still strip the
-          // circle when one is set — the palette never sees local levels.
-          options.localLevels
+          // circles when any are set — the palette never sees local levels.
+          options.localCircles.length > 0
           ? palIdentity
             ? image
             : preprocess(image, palOpts)

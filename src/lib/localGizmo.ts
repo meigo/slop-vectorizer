@@ -1,7 +1,7 @@
 /** Geometry of the local-levels gizmo: a centre dot (move), a solid inner ring (full strength,
  *  resize) and a dashed outer ring (soft edge). Pure, so hit-testing and the drag rules are
  *  testable without a DOM. Screen coordinates are pane-relative CSS pixels. */
-import type { LocalLevels } from '../types'
+import type { LocalCircle } from '../types'
 import type { Point } from './viewportMath'
 
 export type GizmoPart = 'move' | 'inner' | 'outer'
@@ -25,7 +25,7 @@ export const hitSlop = (coarse: boolean) => (coarse ? 18 : 6)
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 
-export function toScreen(l: LocalLevels, iw: number, ih: number, v: ViewXf): ScreenCircle {
+export function toScreen(l: LocalCircle, iw: number, ih: number, v: ViewXf): ScreenCircle {
   return {
     x: v.panX + l.cx * iw * v.zoom,
     y: v.panY + l.cy * ih * v.zoom,
@@ -64,14 +64,14 @@ export function hitTest(
  *  inner ring pushes the outer one; the outer stops at the inner; the centre stays on the
  *  image. */
 export function applyDrag(
-  start: LocalLevels,
+  start: LocalCircle,
   part: GizmoPart,
   iw: number,
   ih: number,
   v: ViewXf,
   from: Point,
   to: Point,
-): LocalLevels {
+): LocalCircle {
   if (part === 'move') {
     return {
       ...start,
@@ -99,7 +99,7 @@ export function initialLocal(
   ih: number,
   blackPoint: number,
   whitePoint: number,
-): LocalLevels {
+): LocalCircle {
   const inner = Math.min(paneW, paneH) / 4 / v.zoom / iw
   return {
     cx: clamp01((paneW / 2 - v.panX) / v.zoom / iw),
@@ -108,6 +108,7 @@ export function initialLocal(
     outer: inner * 1.5,
     blackPoint,
     whitePoint,
+    hidden: false,
   }
 }
 

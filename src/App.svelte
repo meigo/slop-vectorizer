@@ -12,7 +12,7 @@
   import {
     DEFAULT_OPTIONS,
     type ClientResult,
-    type LocalLevels,
+    type LocalCircle,
     type RasterImage,
     type StageName,
   } from './types'
@@ -45,9 +45,9 @@
   // pipeline option goes null. First enable places it on the visible area with the current
   // global points, so turning it on changes nothing until a local slider moves.
   let localOn = $state(false)
-  let localSaved = $state<LocalLevels | null>(null)
+  let localSaved = $state<LocalCircle | null>(null)
   function applyLocal() {
-    options.localLevels = localOn && localSaved ? $state.snapshot(localSaved) : null
+    options.localCircles = localOn && localSaved ? [$state.snapshot(localSaved)] : []
     rerun()
   }
   function toggleLocal() {
@@ -65,7 +65,7 @@
       )
     applyLocal()
   }
-  function setLocal(l: LocalLevels) {
+  function setLocal(l: LocalCircle) {
     localSaved = l
     applyLocal()
   }
@@ -227,7 +227,7 @@
     forgetProjectSave()
     options = d.options
     localSaved = d.localSaved
-    localOn = d.options.localLevels !== null
+    localOn = d.options.localCircles.length > 0
     lastPalette = null
     baseImage = null
     image = null
@@ -556,7 +556,7 @@
           fittedH = 0
           localOn = false
           localSaved = null
-          options.localLevels = null
+          options.localCircles = []
         }}
       />
     </aside>

@@ -32,35 +32,30 @@ describe('firstDirtyStage', () => {
   it('stackedShapes change re-enters at fit', () => {
     expect(firstDirtyStage(base, { ...base, stackedShapes: true }, true)).toBe('fit')
   })
-  const circle = { cx: 0.5, cy: 0.5, inner: 0.1, outer: 0.2, blackPoint: 60, whitePoint: 200 }
-  it('localLevels change -> pre', () => {
-    expect(firstDirtyStage(base, { ...base, localLevels: circle }, true)).toBe('pre')
-    const on = { ...base, localLevels: circle }
-    expect(firstDirtyStage(on, { ...on, localLevels: { ...circle, cx: 0.6 } }, true)).toBe('pre')
+  const circle = {
+    cx: 0.5,
+    cy: 0.5,
+    inner: 0.1,
+    outer: 0.2,
+    blackPoint: 60,
+    whitePoint: 200,
+    hidden: false,
+  }
+  it('adding, moving or hiding an effective circle -> pre', () => {
+    expect(firstDirtyStage(base, { ...base, localCircles: [circle] }, true)).toBe('pre')
+    const on = { ...base, localCircles: [circle] }
+    expect(firstDirtyStage(on, { ...on, localCircles: [{ ...circle, cx: 0.6 }] }, true)).toBe('pre')
+    expect(firstDirtyStage(on, { ...on, localCircles: [{ ...circle, hidden: true }] }, true)).toBe(
+      'pre',
+    )
   })
-  it('an equal localLevels copy is not a change', () => {
-    const on = { ...base, localLevels: circle }
-    expect(firstDirtyStage(on, { ...on, localLevels: { ...circle } }, true)).toBe('fit')
-  })
-  describe('effective circle (points vs. the global ones)', () => {
-    // Same points as base's global blackPoint/whitePoint (0, 255): a no-op circle.
+  it('an equal list, and edits to an ineffective circle, are not changes', () => {
+    const on = { ...base, localCircles: [circle] }
+    expect(firstDirtyStage(on, { ...on, localCircles: [{ ...circle }] }, true)).toBe('fit')
+    // a no-op circle (points equal to the global ones) is not effective, so moving it changes nothing
     const noop = { ...circle, blackPoint: base.blackPoint, whitePoint: base.whitePoint }
-    it('moving a circle whose points equal the global ones does not dirty pre', () => {
-      const on = { ...base, localLevels: noop }
-      expect(firstDirtyStage(on, { ...on, localLevels: { ...noop, cx: 0.6 } }, true)).toBe('fit')
-    })
-    it('moving a circle with different points -> pre', () => {
-      const on = { ...base, localLevels: circle }
-      expect(firstDirtyStage(on, { ...on, localLevels: { ...circle, cx: 0.6 } }, true)).toBe('pre')
-    })
-    it('turning an effective circle off -> pre', () => {
-      const on = { ...base, localLevels: circle }
-      expect(firstDirtyStage(on, { ...on, localLevels: null }, true)).toBe('pre')
-    })
-    it('turning a no-op circle off does not dirty pre', () => {
-      const on = { ...base, localLevels: noop }
-      expect(firstDirtyStage(on, { ...on, localLevels: null }, true)).toBe('fit')
-    })
+    const off = { ...base, localCircles: [noop] }
+    expect(firstDirtyStage(off, { ...off, localCircles: [{ ...noop, cx: 0.9 }] }, true)).toBe('fit')
   })
 })
 

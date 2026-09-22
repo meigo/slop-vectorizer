@@ -4,7 +4,7 @@
  *
  *  Pure: no DOM, no storage. Everything that decides the format lives here. */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import { DEFAULT_OPTIONS, type LocalLevels, type PipelineOptions } from '../types'
+import { DEFAULT_OPTIONS, type LocalCircle, type PipelineOptions } from '../types'
 
 export const PROJECT_VERSION = 1
 
@@ -15,7 +15,7 @@ export interface ProjectData {
   scale: number
   options: PipelineOptions
   /** The remembered circle, kept even while the toggle is off. */
-  localSaved: LocalLevels | null
+  localSaved: LocalCircle | null
 }
 
 const MIME_EXT: Record<string, string> = {
@@ -123,7 +123,7 @@ export async function unpackProject(zip: Blob): Promise<ProjectData> {
     colorOverrides: sanitizeColorOverrides(saved.colorOverrides),
   }
   const localSaved =
-    (parsed.localSaved as LocalLevels | null | undefined) ?? options.localLevels ?? null
+    (parsed.localSaved as LocalCircle | null | undefined) ?? options.localCircles[0] ?? null
   return {
     source,
     sourceName: typeof parsed.sourceName === 'string' ? parsed.sourceName : '',

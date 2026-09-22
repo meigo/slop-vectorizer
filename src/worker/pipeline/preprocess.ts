@@ -1,4 +1,4 @@
-import type { LocalLevels, RasterImage } from '../../types'
+import type { LocalCircle, RasterImage } from '../../types'
 
 export interface PreOptions {
   blackPoint: number
@@ -6,7 +6,7 @@ export interface PreOptions {
   blurRadius: number
   saturation: number
   flatten: number
-  localLevels: LocalLevels | null
+  localCircles: LocalCircle[]
 }
 
 export const IDENTITY_PRE: PreOptions = {
@@ -15,23 +15,35 @@ export const IDENTITY_PRE: PreOptions = {
   blurRadius: 0,
   saturation: 1,
   flatten: 0,
-  localLevels: null,
+  localCircles: [],
 }
 
-/** The circle that actually affects the pixels: null when there is none, or its points equal
- *  the global ones (in which case it changes nothing and is a no-op). */
-export function effectiveLocal(o: {
+/** The circles that actually affect pixels: visible, and with points that differ from the global
+ *  ones (a circle matching them maps every tone to itself, so it is a no-op). Order is kept. */
+export function effectiveCircles(o: {
   blackPoint: number
   whitePoint: number
-  localLevels: LocalLevels | null
-}): LocalLevels | null {
-  const l = o.localLevels
-  if (!l || (l.blackPoint === o.blackPoint && l.whitePoint === o.whitePoint)) return null
-  return l
+  localCircles: LocalCircle[]
+}): LocalCircle[] {
+  return o.localCircles.filter(
+    (c) => !c.hidden && (c.blackPoint !== o.blackPoint || c.whitePoint !== o.whitePoint),
+  )
 }
 
-function localIsNoop(o: PreOptions): boolean {
-  return effectiveLocal(o) === null
+export function sameCircleList(a: LocalCircle[], b: LocalCircle[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((c, i) => {
+    const d = b[i]
+    return (
+      c.cx === d.cx &&
+      c.cy === d.cy &&
+      c.inner === d.inner &&
+      c.outer === d.outer &&
+      c.blackPoint === d.blackPoint &&
+      c.whitePoint === d.whitePoint &&
+      c.hidden === d.hidden
+    )
+  })
 }
 
 export function isIdentityPre(o: PreOptions): boolean {
@@ -41,26 +53,14 @@ export function isIdentityPre(o: PreOptions): boolean {
     o.blurRadius === 0 &&
     o.saturation === 1 &&
     o.flatten === 0 &&
-    localIsNoop(o)
+    effectiveCircles(o).length === 0
   )
 }
 
-/** The pre-effects without the local circle: what palette estimation sees, so moving the circle
+/** The pre-effects without the local circles: what palette estimation sees, so moving a circle
  *  never re-estimates the palette (and swatches/overrides stay put). */
 export function globalPre(o: PreOptions): PreOptions {
-  return { ...o, localLevels: null }
-}
-
-export function sameLocalLevels(a: LocalLevels | null, b: LocalLevels | null): boolean {
-  if (!a || !b) return a === b
-  return (
-    a.cx === b.cx &&
-    a.cy === b.cy &&
-    a.inner === b.inner &&
-    a.outer === b.outer &&
-    a.blackPoint === b.blackPoint &&
-    a.whitePoint === b.whitePoint
-  )
+  return { ...o, localCircles: [] }
 }
 
 /** Local-levels strength at distance d: 1 inside inner, 0 beyond outer, smoothstep between
@@ -336,23 +336,31 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
   const white = Math.max(opts.whitePoint, black + 1)
   const scale = 255 / (white - black)
   const sat = opts.saturation
-  // Local circle, in pixels. Each pixel is levelled with the global AND the local points and
-  // the two results are mixed by its weight — mixing outputs rather than points keeps the tone
-  // mapping monotonic everywhere, so the soft edge cannot halo.
-  const local = localIsNoop(opts) ? null : opts.localLevels!
-  const lBlack = local?.blackPoint ?? 0
-  const lScale = local ? 255 / (Math.max(local.whitePoint, lBlack + 1) - lBlack) : 1
-  const lx = (local?.cx ?? 0) * w
-  const ly = (local?.cy ?? 0) * h
-  const lIn = (local?.inner ?? 0) * w
-  const lOut = Math.max(local?.outer ?? 0, local?.inner ?? 0) * w
   const lev = (v: number, b: number, s: number) => Math.min(255, Math.max(0, (v - b) * s))
+  // Each circle in pixels, with its own levels. A circle levels the ORIGINAL tone and is blended
+  // over the running result by its weight (painter order): its full-strength middle therefore
+  // always shows exactly its own points, and only the soft edges mix, so overlaps cannot seam.
+  const circles = effectiveCircles(opts).map((c) => {
+    const cBlack = c.blackPoint
+    const inner = c.inner * w
+    const outer = Math.max(c.outer, c.inner) * w
+    return {
+      x: c.cx * w,
+      y: c.cy * h,
+      inner,
+      outer,
+      outer2: outer * outer,
+      black: cBlack,
+      scale: 255 / (Math.max(c.whitePoint, cBlack + 1) - cBlack),
+    }
+  })
   const out = new Uint8ClampedArray(working.length)
-  const lOut2 = lOut * lOut
   for (let y = 0, p = 0; y < h; y++) {
-    // Hoisted once per row: the per-pixel work below only adds dx.
-    const dy = y + 0.5 - ly
-    const dy2 = dy * dy
+    // Per row, each circle's vertical offset is fixed; the per-pixel work only adds dx.
+    const dys = circles.map((c) => {
+      const dy = y + 0.5 - c.y
+      return dy * dy
+    })
     for (let x = 0; x < w; x++, p += 4) {
       let r = working[p],
         g = working[p + 1],
@@ -363,25 +371,28 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
         g = lum + (g - lum) * sat
         b = lum + (b - lum) * sat
       }
-      let wt = 0
-      if (local) {
-        const dx = x + 0.5 - lx
-        const d2 = dx * dx + dy2
-        // Squared-distance early-out: skip the sqrt entirely outside the outer ring.
-        if (d2 <= lOut2) wt = localWeight(Math.sqrt(d2), lIn, lOut)
+      let orr = (r - black) * scale,
+        og = (g - black) * scale,
+        ob = (b - black) * scale
+      for (let i = 0; i < circles.length; i++) {
+        const c = circles[i]
+        const dx = x + 0.5 - c.x
+        const d2 = dx * dx + dys[i]
+        // Squared-distance early-out: no sqrt for a pixel outside this circle.
+        if (d2 > c.outer2) continue
+        const wt = localWeight(Math.sqrt(d2), c.inner, c.outer)
+        if (wt === 0) continue
+        // Both sides clamped before mixing, so the blend matches the fast path in the limit.
+        const gr = Math.min(255, Math.max(0, orr)),
+          gg = Math.min(255, Math.max(0, og)),
+          gb = Math.min(255, Math.max(0, ob))
+        orr = gr + (lev(r, c.black, c.scale) - gr) * wt
+        og = gg + (lev(g, c.black, c.scale) - gg) * wt
+        ob = gb + (lev(b, c.black, c.scale) - gb) * wt
       }
-      if (wt === 0) {
-        out[p] = (r - black) * scale // Uint8ClampedArray clamps + rounds
-        out[p + 1] = (g - black) * scale
-        out[p + 2] = (b - black) * scale
-      } else {
-        const gr = lev(r, black, scale),
-          gg = lev(g, black, scale),
-          gb = lev(b, black, scale)
-        out[p] = gr + (lev(r, lBlack, lScale) - gr) * wt
-        out[p + 1] = gg + (lev(g, lBlack, lScale) - gg) * wt
-        out[p + 2] = gb + (lev(b, lBlack, lScale) - gb) * wt
-      }
+      out[p] = orr // Uint8ClampedArray clamps + rounds
+      out[p + 1] = og
+      out[p + 2] = ob
       out[p + 3] = 255
     }
   }

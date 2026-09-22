@@ -7,10 +7,18 @@ import {
   toScreen,
   type ViewXf,
 } from '../src/lib/localGizmo'
-import type { LocalLevels } from '../src/types'
+import type { LocalCircle } from '../src/types'
 
 // 200x100 image; circle centre (100,50) px, inner 20 px, outer 40 px
-const L: LocalLevels = { cx: 0.5, cy: 0.5, inner: 0.1, outer: 0.2, blackPoint: 10, whitePoint: 240 }
+const L: LocalCircle = {
+  cx: 0.5,
+  cy: 0.5,
+  inner: 0.1,
+  outer: 0.2,
+  blackPoint: 10,
+  whitePoint: 240,
+  hidden: false,
+}
 const V1: ViewXf = { zoom: 1, panX: 0, panY: 0 }
 const V2: ViewXf = { zoom: 2, panX: 30, panY: -10 }
 

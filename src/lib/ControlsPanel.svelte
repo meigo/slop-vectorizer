@@ -1,7 +1,7 @@
 <!-- src/lib/ControlsPanel.svelte -->
 <script lang="ts">
   import { Columns2, SquareSplitHorizontal, Maximize } from '@lucide/svelte'
-  import type { LocalLevels, PipelineOptions, PipelineStats } from '../types'
+  import type { LocalCircle, PipelineOptions, PipelineStats } from '../types'
   import { maxGapClosing } from './decode'
   import FileMenu from './FileMenu.svelte'
   import { sliderFill } from './sliderFill'
@@ -64,7 +64,7 @@
     mod: string
     localOn: boolean
     /** The remembered circle; kept while off so re-enabling restores it. */
-    local: LocalLevels | null
+    local: LocalCircle | null
     onchange: () => void
     onscale: () => void
     onfit: () => void
@@ -73,7 +73,7 @@
     onsave: (asNew: boolean) => void
     onsaveproject: (asNew: boolean) => void
     ontogglelocal: () => void
-    onlocal: (l: LocalLevels) => void
+    onlocal: (l: LocalCircle) => void
   } = $props()
 
   const rgbHex = (p: number[], i: number) =>

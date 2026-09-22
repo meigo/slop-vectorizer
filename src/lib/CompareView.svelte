@@ -1,6 +1,6 @@
 <!-- src/lib/CompareView.svelte -->
 <script lang="ts">
-  import type { LocalLevels, RasterImage } from '../types'
+  import type { LocalCircle, RasterImage } from '../types'
   import type { Viewport } from './viewport.svelte'
   import { pinchStep, type Point } from './viewportMath'
   import LocalGizmo from './LocalGizmo.svelte'
@@ -17,9 +17,9 @@
     image: RasterImage
     svg: string
     viewport: Viewport
-    local?: LocalLevels | null
+    local?: LocalCircle | null
     size?: { width: number; height: number } | null
-    onlocal?: (l: LocalLevels) => void
+    onlocal?: (l: LocalCircle) => void
   } = $props()
 
   let divider = $state(50) // percent
@@ -30,7 +30,7 @@
   let draggingDivider = false
   const coarse = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches
   // A gizmo drag in progress: which pointer, what it grabbed, and where it started.
-  let gz: { id: number; part: GizmoPart; start: LocalLevels; from: Point } | null = null
+  let gz: { id: number; part: GizmoPart; start: LocalCircle; from: Point } | null = null
   let hoverCursor = $state<string | null>(null)
   const circle = $derived(local && size ? toScreen(local, size.width, size.height, viewport) : null)
 

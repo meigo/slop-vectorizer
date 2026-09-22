@@ -36,7 +36,7 @@ export function vectorize(
     blurRadius: options.blurRadius,
     saturation: options.saturation,
     flatten: options.flatten,
-    localLevels: options.localLevels,
+    localCircles: options.localCircles,
   }
   const identity = isIdentityPre(preOpts)
   const src = identity ? image : stage('pre', () => preprocess(image, preOpts))
@@ -47,8 +47,8 @@ export function vectorize(
         ? paletteImage
         : preprocess(paletteImage, palOpts)
       : // No distinct palette source: fall back to the working image, but still strip the
-        // circle when one is set — the palette never sees local levels.
-        options.localLevels
+        // circles when any are set — the palette never sees local levels.
+        options.localCircles.length > 0
         ? isIdentityPre(palOpts)
           ? image
           : preprocess(image, palOpts)

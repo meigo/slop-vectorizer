@@ -3,12 +3,13 @@ import {
   preprocess,
   IDENTITY_PRE,
   localWeight,
-  sameLocalLevels,
+  effectiveCircles,
+  sameCircleList,
   globalPre,
 } from '../src/worker/pipeline/preprocess'
 import { mulberry32 } from '../src/worker/pipeline/palette'
 import type { RasterImage } from '../src/types'
-import type { LocalLevels } from '../src/types'
+import type { LocalCircle } from '../src/types'
 
 function flat(width: number, height: number, rgb: [number, number, number]): RasterImage {
   const data = new Uint8ClampedArray(width * height * 4)
@@ -238,13 +239,15 @@ describe('localWeight', () => {
 
 describe('local levels', () => {
   // 20x20 → circle centre (10,10) px, inner 4 px, outer 6 px
-  const circle = (blackPoint: number, whitePoint: number): LocalLevels => ({
+  const circle = (over: Partial<LocalCircle> = {}): LocalCircle => ({
     cx: 0.5,
     cy: 0.5,
     inner: 0.2,
     outer: 0.3,
-    blackPoint,
-    whitePoint,
+    blackPoint: 100,
+    whitePoint: 200,
+    hidden: false,
+    ...over,
   })
   const at = (img: RasterImage, x: number, y: number) => img.data[(y * img.width + x) * 4]
 
@@ -252,14 +255,16 @@ describe('local levels', () => {
     // centre 10.5 px, radius 5 px: pixel (15,10) has its centre at exactly d = 5
     const out = preprocess(flat(20, 20, [50, 50, 50]), {
       ...IDENTITY_PRE,
-      localLevels: {
-        cx: 0.525,
-        cy: 0.525,
-        inner: 0.25,
-        outer: 0.25,
-        blackPoint: 0,
-        whitePoint: 100,
-      },
+      localCircles: [
+        circle({
+          cx: 0.525,
+          cy: 0.525,
+          inner: 0.25,
+          outer: 0.25,
+          blackPoint: 0,
+          whitePoint: 100,
+        }),
+      ],
     })
     expect(at(out, 15, 10)).toBe(at(out, 14, 10)) // on the ring = inside
     expect(Math.abs(at(out, 14, 10) - 127.5)).toBeLessThanOrEqual(0.5) // 50 through local 0..100
@@ -269,7 +274,7 @@ describe('local levels', () => {
   it('inside follows the local points, outside the global, the edge lies between', () => {
     const out = preprocess(flat(20, 20, [100, 100, 100]), {
       ...IDENTITY_PRE,
-      localLevels: circle(100, 200),
+      localCircles: [circle({ blackPoint: 100, whitePoint: 200 })],
     })
     expect(at(out, 10, 10)).toBe(0) // local: 100 → black
     expect(at(out, 0, 0)).toBe(100) // global identity
@@ -280,26 +285,127 @@ describe('local levels', () => {
 
   it('local points equal to the global ones are an identity', () => {
     const img = flat(8, 8, [100, 150, 200])
-    expect(preprocess(img, { ...IDENTITY_PRE, localLevels: circle(0, 255) })).toBe(img)
+    expect(
+      preprocess(img, {
+        ...IDENTITY_PRE,
+        localCircles: [circle({ blackPoint: 0, whitePoint: 255 })],
+      }),
+    ).toBe(img)
   })
 
   it('local points equal to non-identity global points change nothing', () => {
     const img = flat(20, 20, [120, 120, 120])
     const g = { ...IDENTITY_PRE, blackPoint: 40, whitePoint: 220 }
     const a = preprocess(img, g)
-    const b = preprocess(img, { ...g, localLevels: circle(40, 220) })
+    const b = preprocess(img, {
+      ...g,
+      localCircles: [circle({ blackPoint: 40, whitePoint: 220 })],
+    })
     expect(Array.from(b.data)).toEqual(Array.from(a.data))
   })
 
-  it('sameLocalLevels compares by value', () => {
-    expect(sameLocalLevels(null, null)).toBe(true)
-    expect(sameLocalLevels(circle(1, 2), null)).toBe(false)
-    expect(sameLocalLevels(circle(1, 2), circle(1, 2))).toBe(true)
-    expect(sameLocalLevels(circle(1, 2), { ...circle(1, 2), cx: 0.4 })).toBe(false)
+  it('globalPre strips the circle and keeps everything else', () => {
+    const o = {
+      ...IDENTITY_PRE,
+      blackPoint: 9,
+      localCircles: [circle({ blackPoint: 1, whitePoint: 2 })],
+    }
+    expect(globalPre(o)).toEqual({ ...IDENTITY_PRE, blackPoint: 9, localCircles: [] })
   })
 
-  it('globalPre strips the circle and keeps everything else', () => {
-    const o = { ...IDENTITY_PRE, blackPoint: 9, localLevels: circle(1, 2) }
-    expect(globalPre(o)).toEqual({ ...IDENTITY_PRE, blackPoint: 9, localLevels: null })
+  it('a later circle wins in its middle, an earlier one keeps its own middle elsewhere', () => {
+    // 40x20: circle A centred on x=10, circle B on x=30, both radius 4/6 px
+    const a = circle({
+      cx: 10 / 40,
+      cy: 0.5,
+      inner: 4 / 40,
+      outer: 6 / 40,
+      blackPoint: 100,
+      whitePoint: 200,
+    })
+    const b = circle({
+      cx: 30 / 40,
+      cy: 0.5,
+      inner: 4 / 40,
+      outer: 6 / 40,
+      blackPoint: 0,
+      whitePoint: 120,
+    })
+    const out = preprocess(flat(40, 20, [120, 120, 120]), { ...IDENTITY_PRE, localCircles: [a, b] })
+    const lev = (v: number, bp: number, wp: number) => Math.round(((v - bp) * 255) / (wp - bp))
+    expect(at(out, 10, 10)).toBe(lev(120, 100, 200)) // A's middle: A's own points
+    expect(at(out, 30, 10)).toBe(lev(120, 0, 120)) // B's middle: B's own points
+    expect(at(out, 20, 10)).toBe(120) // between them: global identity
+  })
+
+  it('overlapping circles: the later one owns the shared middle, edges lie between', () => {
+    // centres 4 px apart, so each middle is inside the other's fade
+    const a = circle({
+      cx: 18 / 40,
+      cy: 0.5,
+      inner: 3 / 40,
+      outer: 8 / 40,
+      blackPoint: 100,
+      whitePoint: 200,
+    })
+    const b = circle({
+      cx: 22 / 40,
+      cy: 0.5,
+      inner: 3 / 40,
+      outer: 8 / 40,
+      blackPoint: 0,
+      whitePoint: 120,
+    })
+    const out = preprocess(flat(40, 20, [120, 120, 120]), { ...IDENTITY_PRE, localCircles: [a, b] })
+    const lev = (v: number, bp: number, wp: number) => Math.round(((v - bp) * 255) / (wp - bp))
+    expect(at(out, 22, 10)).toBe(lev(120, 0, 120)) // B's middle is pure B despite overlapping A
+    const edge = at(out, 26, 10) // inside B's fade only
+    expect(edge).toBeGreaterThan(Math.min(120, lev(120, 0, 120)))
+    expect(edge).toBeLessThan(Math.max(120, lev(120, 0, 120)))
+  })
+
+  it('stacking two identical circles matches one in the middle and outside, and only compounds in the fade', () => {
+    const one = circle({ blackPoint: 50, whitePoint: 200 })
+    const img = flat(20, 20, [120, 120, 120])
+    const single = preprocess(img, { ...IDENTITY_PRE, localCircles: [one] })
+    const doubled = preprocess(img, { ...IDENTITY_PRE, localCircles: [one, { ...one }] })
+    // full-strength middle: both are exactly the circle's own mapping
+    expect(at(doubled, 10, 10)).toBe(at(single, 10, 10))
+    // outside the outer ring: both are the global mapping
+    expect(at(doubled, 0, 0)).toBe(at(single, 0, 0))
+    // in the fade the second pass pulls further toward the local value, never past it
+    // (pixel (15,10) is geometrically in the fade too, but its rounded byte happens to
+    // coincide between single and doubled here; (7,5) shows the same fade at a point
+    // where the compounding actually moves the rounded output)
+    const fadeSingle = at(single, 7, 5)
+    const fadeDoubled = at(doubled, 7, 5)
+    const local = at(single, 10, 10)
+    const global = at(single, 0, 0)
+    expect(fadeDoubled).not.toBe(fadeSingle)
+    expect(Math.abs(fadeDoubled - global)).toBeGreaterThan(Math.abs(fadeSingle - global))
+    expect(Math.abs(fadeDoubled - local)).toBeLessThanOrEqual(Math.abs(fadeSingle - local))
+  })
+
+  it('hidden circles are skipped, and an empty list is an identity', () => {
+    const img = flat(20, 20, [120, 120, 120])
+    expect(preprocess(img, { ...IDENTITY_PRE, localCircles: [] })).toBe(img)
+    expect(preprocess(img, { ...IDENTITY_PRE, localCircles: [circle({ hidden: true })] })).toBe(img)
+  })
+
+  it('effectiveCircles drops hidden and no-op circles, keeping order', () => {
+    const keep = circle({ blackPoint: 10, whitePoint: 250 })
+    const noop = circle({ blackPoint: 0, whitePoint: 255 })
+    const hidden = circle({ blackPoint: 10, whitePoint: 250, hidden: true })
+    const o = { blackPoint: 0, whitePoint: 255, localCircles: [noop, keep, hidden] }
+    expect(effectiveCircles(o)).toEqual([keep])
+  })
+
+  it('sameCircleList compares by value, in order', () => {
+    const a = circle()
+    const b = circle({ cx: 0.4 })
+    expect(sameCircleList([a, b], [{ ...a }, { ...b }])).toBe(true)
+    expect(sameCircleList([a, b], [b, a])).toBe(false)
+    expect(sameCircleList([a], [a, b])).toBe(false)
+    expect(sameCircleList([], [])).toBe(true)
   })
 })

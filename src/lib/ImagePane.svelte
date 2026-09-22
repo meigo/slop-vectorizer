@@ -1,6 +1,6 @@
 <!-- src/lib/ImagePane.svelte -->
 <script lang="ts">
-  import type { LocalLevels, RasterImage } from '../types'
+  import type { LocalCircle, RasterImage } from '../types'
   import type { Viewport } from './viewport.svelte'
   import { pinchStep, type Point } from './viewportMath'
   import LocalGizmo from './LocalGizmo.svelte'
@@ -19,9 +19,9 @@
     svg?: string | null
     label: string
     viewport: Viewport
-    local?: LocalLevels | null
+    local?: LocalCircle | null
     size?: { width: number; height: number } | null
-    onlocal?: (l: LocalLevels) => void
+    onlocal?: (l: LocalCircle) => void
   } = $props()
 
   let el: HTMLDivElement
@@ -30,7 +30,7 @@
   const pointers = new Map<number, Point>()
   const coarse = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches
   // A gizmo drag in progress: which pointer, what it grabbed, and where it started.
-  let gz: { id: number; part: GizmoPart; start: LocalLevels; from: Point } | null = null
+  let gz: { id: number; part: GizmoPart; start: LocalCircle; from: Point } | null = null
   let hoverCursor = $state<string | null>(null)
   const circle = $derived(local && size ? toScreen(local, size.width, size.height, viewport) : null)
 
