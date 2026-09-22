@@ -144,7 +144,7 @@
       {@html svg}
     </div>
   </div>
-  {#if circle}<LocalGizmo c={circle} />{/if}
+  {#if circle}<LocalGizmo c={circle} state="selected" />{/if}
   <div
     class="divider"
     style:left={`${divider}%`}

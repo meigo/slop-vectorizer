@@ -3,6 +3,7 @@ import {
   applyDrag,
   cursorFor,
   hitTest,
+  hitTestList,
   initialLocal,
   toScreen,
   type ViewXf,
@@ -128,5 +129,42 @@ describe('cursorFor', () => {
     expect(cursorFor('outer', c, 0, -20)).toBe('ns-resize')
     expect(cursorFor('outer', c, 14, 14)).toBe('nwse-resize')
     expect(cursorFor('inner', c, -7, 7)).toBe('nesw-resize')
+  })
+})
+
+describe('hitTestList', () => {
+  const base = { inner: 0.1, outer: 0.2, blackPoint: 10, whitePoint: 240, hidden: false }
+  const A: LocalCircle = { ...base, cx: 0.25, cy: 0.5 } // centre (50,50) px at zoom 1
+  const B: LocalCircle = { ...base, cx: 0.75, cy: 0.5 } // centre (150,50) px
+  const V: ViewXf = { zoom: 1, panX: 0, panY: 0 }
+  const hit = (circles: LocalCircle[], selected: number, px: number, py: number) =>
+    hitTestList(circles, selected, 200, 100, V, px, py, 6, 9999)
+
+  it('finds the circle under the pointer, whichever is selected', () => {
+    expect(hit([A, B], 0, 150, 50)).toEqual({ index: 1, part: 'move' })
+    expect(hit([A, B], 1, 50, 50)).toEqual({ index: 0, part: 'move' })
+    expect(hit([A, B], 0, 50 + 20, 50)).toEqual({ index: 0, part: 'inner' })
+  })
+  it('prefers the topmost circle where two overlap', () => {
+    const over: LocalCircle = { ...base, cx: 0.25, cy: 0.5, inner: 0.15, outer: 0.2 }
+    expect(hit([A, over], 0, 50, 50)).toEqual({ index: 1, part: 'move' })
+  })
+  it('keeps the selected circle handles reachable under an overlapping neighbour', () => {
+    // `over` sits on top of A and covers A's inner ring; A is selected
+    const over: LocalCircle = { ...base, cx: 0.25, cy: 0.5, inner: 0.15, outer: 0.2 }
+    expect(hit([A, over], 0, 50 + 20, 50)).toEqual({ index: 0, part: 'inner' })
+    // but a click in the shared interior (10 px out — inside the 8 px dot zone would hit A's
+    // own centre dot, which is not a ring handle) still goes to the topmost circle
+    expect(hit([A, over], 0, 50 + 10, 50)).toEqual({ index: 1, part: 'move' })
+  })
+  it('ignores hidden circles', () => {
+    expect(hit([{ ...A, hidden: true }, B], 1, 50, 50)).toBe(null)
+  })
+  it('returns null where no circle is', () => {
+    expect(hit([A, B], 0, 100, 95)).toBe(null)
+  })
+  it('an empty list or no selection is safe', () => {
+    expect(hit([], -1, 10, 10)).toBe(null)
+    expect(hit([A], -1, 50, 50)).toEqual({ index: 0, part: 'move' })
   })
 })

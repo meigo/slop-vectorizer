@@ -112,6 +112,48 @@ export function initialLocal(
   }
 }
 
+export type GizmoState = 'selected' | 'unselected' | 'hidden'
+export interface GizmoHit {
+  index: number
+  part: GizmoPart
+}
+
+/** Which circle a pointer grabs, and where. The SELECTED circle's ring handles ('inner' /
+ *  'outer') are tried first, so an overlapping neighbour drawn on top can never steal them —
+ *  the rings of the circle being edited must stay reachable. Its centre dot and interior get no
+ *  such priority: where circles coincide, a dot or interior click goes to whichever is visibly
+ *  on top, same as any other overlap — otherwise two circles sharing a centre could never select
+ *  the top one by clicking it. Failing a ring match, the rest are scanned from the top of the
+ *  stack down (their dot, rings and interior all count); if none of them match either, the
+ *  selected circle's own dot/interior hit (if any) is used last, so dragging inside it still
+ *  moves it instead of falling through to a pane pan. Hidden circles are transparent. */
+export function hitTestList(
+  circles: LocalCircle[],
+  selected: number,
+  iw: number,
+  ih: number,
+  v: ViewXf,
+  px: number,
+  py: number,
+  slop: number,
+  maxMoveRadius: number,
+): GizmoHit | null {
+  const test = (i: number) => {
+    const c = circles[i]
+    if (!c || c.hidden) return null
+    const part = hitTest(toScreen(c, iw, ih, v), px, py, slop, maxMoveRadius)
+    return part ? { index: i, part } : null
+  }
+  const handle = selected >= 0 ? test(selected) : null
+  if (handle && handle.part !== 'move') return handle
+  for (let i = circles.length - 1; i >= 0; i--) {
+    if (i === selected) continue
+    const h = test(i)
+    if (h) return h
+  }
+  return handle
+}
+
 /** Hover cursor: move for the centre, a resize arrow pointing along the radius for a ring. */
 export function cursorFor(part: GizmoPart, c: ScreenCircle, px: number, py: number): string {
   if (part === 'move') return 'move'

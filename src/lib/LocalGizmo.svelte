@@ -3,19 +3,31 @@
      strokes and the dot keep their size at any zoom. Pointer handling lives in the panes. White
      over a dark halo rather than theme tokens: it sits on ARTWORK, which may be light or dark. -->
 <script lang="ts">
-  import { DOT_R, type ScreenCircle } from './localGizmo'
+  import { DOT_R, type GizmoState, type ScreenCircle } from './localGizmo'
 
-  let { c }: { c: ScreenCircle } = $props()
+  let { c, state }: { c: ScreenCircle; state: GizmoState } = $props()
 </script>
 
 <svg class="gizmo" aria-hidden="true">
-  <g fill="none">
-    <circle cx={c.x} cy={c.y} r={c.outer} class="halo" />
-    <circle cx={c.x} cy={c.y} r={c.outer} class="ring dashed" />
-    <circle cx={c.x} cy={c.y} r={c.inner} class="halo" />
-    <circle cx={c.x} cy={c.y} r={c.inner} class="ring" />
-  </g>
-  <circle cx={c.x} cy={c.y} r={DOT_R} class="dot" />
+  {#if state === 'selected'}
+    <g fill="none">
+      <circle cx={c.x} cy={c.y} r={c.outer} class="halo" />
+      <circle cx={c.x} cy={c.y} r={c.outer} class="ring dashed" />
+      <circle cx={c.x} cy={c.y} r={c.inner} class="halo" />
+      <circle cx={c.x} cy={c.y} r={c.inner} class="ring" />
+    </g>
+    <circle cx={c.x} cy={c.y} r={DOT_R} class="dot" />
+  {:else}
+    <g fill="none">
+      <circle cx={c.x} cy={c.y} r={c.inner} class="halo" />
+      <circle
+        cx={c.x}
+        cy={c.y}
+        r={c.inner}
+        class={['ring', 'quiet', state === 'hidden' && 'dashed']}
+      />
+    </g>
+  {/if}
 </svg>
 
 <style>
@@ -41,5 +53,9 @@
     fill: #fff;
     stroke: rgb(0 0 0 / 0.55);
     stroke-width: 1.5;
+  }
+  .quiet {
+    stroke-width: 1;
+    opacity: 0.7;
   }
 </style>

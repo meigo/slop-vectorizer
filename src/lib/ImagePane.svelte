@@ -130,7 +130,7 @@
       {@html svg}
     {/if}
   </div>
-  {#if circle}<LocalGizmo c={circle} />{/if}
+  {#if circle}<LocalGizmo c={circle} state="selected" />{/if}
   <span class="pane-label">{label}</span>
 </div>
 
