@@ -24,7 +24,7 @@ Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 3
 - Two synced compare views: side-by-side and overlay-split with draggable divider, deep zoom
 - Editable palette: click a swatch to recolor the output; overrides survive scale and pre-effect changes
 - Decode-time rescaling ×⅓–×3 (down for smoother shapes, up to save thin strokes; gap-closing range scales with it)
-- Light/dark theme, keyboard-accessible controls
+- Keyboard-accessible controls; Save rewrites the same file (Chromium) or goes to Save to Files (iPad)
 - Deterministic: same input + settings → byte-identical SVG
 
 ## Development

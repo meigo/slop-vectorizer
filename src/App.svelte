@@ -4,20 +4,25 @@
   import CompareView from './lib/CompareView.svelte'
   import ControlsPanel from './lib/ControlsPanel.svelte'
   import ImagePane from './lib/ImagePane.svelte'
+  import ShareReadyDialog from './lib/ShareReadyDialog.svelte'
   import { Viewport } from './lib/viewport.svelte'
   import { VectorizerClient } from './lib/workerClient'
   import { fileToRasterImage, maxGapClosing } from './lib/decode'
   import { DEFAULT_OPTIONS, type ClientResult, type RasterImage, type StageName } from './types'
   import { remapOverrides } from './lib/paletteRemap'
+  import { saveToFilesAvailable } from './lib/share'
+  import { deliverFile, errorMessage, svgFileName, writeSvgFile } from './lib/saveFile'
 
   const client = new VectorizerClient()
   const viewport = new Viewport()
   let mode = $state<'side' | 'split'>('side')
+  // View-only: show the decoded input without pre-effects. Never affects the output.
+  let showUnmodified = $state(false)
   let viewsW = $state(0),
     viewsH = $state(0)
   let fittedW = 0,
     fittedH = 0
-  let sourceFile = $state<Blob | null>(null)
+  let sourceFile = $state<File | null>(null)
   let scale = $state(1)
   let image = $state<RasterImage | null>(null)
   let result = $state<ClientResult | null>(null)
@@ -35,10 +40,56 @@
   // and can flip auto-k). Plain let — it's a large buffer, no reactivity needed.
   let baseImage: RasterImage | null = null
 
+  // Saving. iPad/iPhone go through the share sheet (Save to Files); elsewhere Chromium keeps the
+  // picked file's handle so the next Save overwrites it. The handle belongs to the current source
+  // image: loading another one forgets it, so Save never overwrites one image's SVG with another's.
+  const saveToFiles = saveToFilesAvailable()
+  const canSaveAs = !saveToFiles && typeof window.showSaveFilePicker === 'function'
+  let fileHandle: FileSystemFileHandle | null = null
+  let savedName = $state<string | null>(null)
+  let saveStatus = $state<string | null>(null)
+  let shareReady = $state<{ file: File; error: string } | null>(null)
+
+  function forgetSave() {
+    fileHandle = null
+    savedName = null
+    saveStatus = null
+  }
+
+  async function save(asNew: boolean) {
+    const svg = result?.svg
+    if (!svg) return
+    const source = sourceFile
+    const name = svgFileName(source?.name)
+    saveStatus = null
+    try {
+      if (saveToFiles) {
+        const file = new File([svg], name, { type: 'image/svg+xml' })
+        // Serializing is already done, so the sheet can still ride the tap that started the save.
+        const r = await deliverFile(file)
+        if (r.kind === 'shared') saveStatus = `Sent ${name} to the share sheet`
+        else if (r.kind === 'downloaded') saveStatus = `Downloaded ${name}`
+        else if (r.kind === 'dismissed') saveStatus = 'Not saved — the share sheet was closed'
+        else shareReady = { file, error: r.error }
+        return
+      }
+      const r = await writeSvgFile(svg, name, fileHandle, asNew)
+      if (!r || sourceFile !== source) return // cancelled, or a new image arrived meanwhile
+      fileHandle = r.handle
+      savedName = r.handle ? r.name : null
+      saveStatus = r.handle ? `Saved ${r.name}` : `Downloaded ${r.name}`
+    } catch (e) {
+      error = `Save failed: ${errorMessage(e)}`
+    }
+  }
+
   const stats = $derived(result?.stats ?? null)
   // Compare view shows the preprocessed bitmap (levels/blur/saturation applied) when
-  // the pipeline produced one, so pre-effect sliders are visible on the LEFT side.
-  const displayImage = $derived(result?.preImage ?? image)
+  // the pipeline produced one, so pre-effect sliders are visible on the LEFT side —
+  // unless the Unmodified toggle asks for the plain decode. Both share dimensions, so
+  // toggling never refits the view.
+  const adjusted = $derived(!!result?.preImage && !showUnmodified)
+  const displayImage = $derived(adjusted ? result!.preImage! : image)
 
   // The pipeline emits an SVG with only a viewBox (no width/height), so a bare
   // {@html} render would size it via CSS (100%/auto) instead of viewBox scale.
@@ -139,6 +190,7 @@
 
   function handleFile(file: File) {
     sourceFile = file
+    forgetSave()
     void decodeAndRun(file)
   }
 
@@ -201,7 +253,7 @@
       {#if result && displayImage && mode === 'split'}
         <CompareView image={displayImage} svg={sizedSvg} {viewport} />
       {:else}
-        <ImagePane image={displayImage} label="Original" {viewport} />
+        <ImagePane image={displayImage} label={adjusted ? 'Adjusted' : 'Original'} {viewport} />
         <ImagePane svg={result ? sizedSvg : null} label="SVG" {viewport} />
       {/if}
       {#if stage}<span class="stage-pill">Vectorizing… ({stage})</span>{/if}
@@ -211,16 +263,23 @@
         bind:options
         bind:scale
         bind:mode
+        bind:showUnmodified
+        hasAdjustments={!!result?.preImage}
         {stats}
         svg={result?.svg ?? null}
         palette={result?.palette ?? null}
         {notice}
+        {savedName}
+        {canSaveAs}
+        {saveStatus}
+        onsave={save}
         onchange={rerun}
         onscale={handleScale}
         onfit={fit}
         onnew={() => {
           client.cancel()
           sourceFile = null
+          forgetSave()
           scale = 1
           lastScale = 1
           preserveNextFraming = false
@@ -238,9 +297,19 @@
   {#if error}
     <div class="toast" role="alert">
       {error}
-      <button onclick={() => (error = null)}>×</button>
+      <button onclick={() => (error = null)} aria-label="Dismiss">×</button>
     </div>
   {/if}
+{/if}
+{#if shareReady}
+  <ShareReadyDialog
+    file={shareReady.file}
+    error={shareReady.error}
+    onclose={(status) => {
+      shareReady = null
+      saveStatus = status
+    }}
+  />
 {/if}
 
 <style>
@@ -254,7 +323,7 @@
     display: grid;
     min-width: 0;
     position: relative;
-    background: var(--color-canvas-bg);
+    background: var(--color-ground);
   }
   .views.side {
     grid-template-columns: 1fr 1fr;
@@ -265,19 +334,18 @@
     bottom: 1rem;
     left: 50%;
     transform: translateX(-50%);
-    background: var(--color-accent);
-    color: var(--color-accent-text);
-    opacity: 0.85;
-    font-size: 0.85rem;
-    padding: 0.35rem 0.9rem;
+    background: var(--color-panel);
+    border: 1px solid var(--color-line);
+    color: var(--color-muted);
+    font-size: 12px;
+    padding: 4px 12px;
     border-radius: 999px;
     pointer-events: none;
   }
   .panel {
     overflow-y: auto;
-    border-left: 1px solid var(--color-border);
-    background: var(--color-surface);
-    padding: 0.75rem;
+    border-left: 1px solid var(--color-line);
+    background: var(--color-panel);
   }
   .empty {
     height: 100vh;
@@ -296,29 +364,33 @@
     margin: 0 0 0.5rem;
   }
   .intro p {
-    font-size: 12px;
-    color: var(--color-text-secondary);
+    font-size: 14px;
+    color: var(--color-muted);
     line-height: 1.55;
     margin: 0 0 1.5rem;
-    background: var(--color-canvas-bg);
   }
   .toast {
     position: fixed;
     bottom: 1rem;
     right: 316px;
-    background: #c0392b;
-    color: white;
-    padding: 0.75rem 1rem;
+    max-width: 360px;
+    background: var(--color-panel);
+    border: 1px solid var(--color-danger);
+    color: var(--color-text);
+    font-size: 12px;
+    padding: 8px 12px;
     border-radius: 6px;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.4);
     display: flex;
     gap: 1rem;
     align-items: center;
   }
   .toast button {
+    height: auto;
+    padding: 0;
     background: none;
     border: none;
-    color: white;
-    cursor: pointer;
-    font-size: 1rem;
+    color: var(--color-muted);
+    font-size: 16px;
   }
 </style>

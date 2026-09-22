@@ -52,19 +52,19 @@
 
 <style>
   .dropzone {
-    border: 2px dashed var(--color-border);
+    border: 2px dashed var(--color-line);
     border-radius: 8px;
     padding: 3rem;
     text-align: center;
-    color: var(--color-text-secondary);
-    background: var(--color-surface);
+    color: var(--color-muted);
+    background: var(--color-panel);
     cursor: pointer;
   }
   .dropzone.dragging {
-    border-color: var(--color-selection);
-    background: color-mix(in srgb, var(--color-selection) 8%, var(--color-surface));
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
   }
   .error {
-    color: #c0392b;
+    color: var(--color-danger);
   }
 </style>

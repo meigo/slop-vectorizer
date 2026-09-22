@@ -1,34 +1,59 @@
 <!-- src/lib/ControlsPanel.svelte -->
 <script lang="ts">
-  import { Moon, Sun, Columns2, SquareSplitHorizontal, Maximize } from '@lucide/svelte'
-  import { theme } from './theme.svelte'
+  import { Columns2, SquareSplitHorizontal, Maximize } from '@lucide/svelte'
   import type { PipelineOptions, PipelineStats } from '../types'
   import { maxGapClosing } from './decode'
+  import { sliderFill } from './sliderFill'
+
+  type SliderKey =
+    | 'smoothness'
+    | 'despeckleSize'
+    | 'gapClosing'
+    | 'blackPoint'
+    | 'whitePoint'
+    | 'flatten'
+    | 'blurRadius'
+    | 'saturation'
 
   let {
     options = $bindable(),
     scale = $bindable(),
     mode = $bindable(),
+    showUnmodified = $bindable(),
+    hasAdjustments,
     stats,
     svg,
     palette,
     notice,
+    savedName,
+    canSaveAs,
+    saveStatus,
     onchange,
     onscale,
     onfit,
     onnew,
+    onsave,
   }: {
     options: PipelineOptions
     scale: number
     mode: 'side' | 'split'
+    showUnmodified: boolean
+    /** Whether any Input adjustment is active; without one the input is already unmodified. */
+    hasAdjustments: boolean
     stats: PipelineStats | null
     svg: string | null
     palette: number[] | null
     notice: string | null
+    /** The file Save overwrites (desktop Chromium, after a first save); null = Save asks where. */
+    savedName: string | null
+    /** Whether a separate "Save as…" means anything: only with a save picker, i.e. not iPad. */
+    canSaveAs: boolean
+    saveStatus: string | null
     onchange: () => void
     onscale: () => void
     onfit: () => void
     onnew: () => void
+    onsave: (asNew: boolean) => void
   } = $props()
 
   const rgbHex = (p: number[], i: number) =>
@@ -48,15 +73,6 @@
     onchange()
   }
 
-  function download() {
-    if (!svg) return
-    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'vectorized.svg'
-    a.click()
-    URL.revokeObjectURL(url)
-  }
   const totalMs = (s: PipelineStats) =>
     Object.values(s.timings)
       .reduce((a, b) => a + (b ?? 0), 0)
@@ -69,207 +85,213 @@
   const sizeKb = (s: string) => (new TextEncoder().encode(s).length / 1024).toFixed(1) + ' kB'
 </script>
 
+<!-- label | slider | value. The value box is fixed-width and tabular so the slider does not
+     resize as digits change (guide §6). -->
+{#snippet slider(
+  label: string,
+  key: SliderKey,
+  min: number,
+  max: number,
+  step: number,
+  digits: number,
+)}
+  <label class="slider-row">
+    <span class="name">{label}</span>
+    <input
+      type="range"
+      {min}
+      {max}
+      {step}
+      bind:value={options[key]}
+      oninput={onchange}
+      style={sliderFill(options[key], min, max)}
+    />
+    <span class="value">{options[key].toFixed(digits)}</span>
+  </label>
+{/snippet}
+
 <div class="cp">
-  <header>
+  <header class="top">
     <strong>slop-vectorizer</strong>
-    <button class="icon-btn" onclick={() => theme.toggle()} title="Toggle theme">
-      {#if theme.current === 'dark'}<Sun size={14} />{:else}<Moon size={14} />{/if}
-    </button>
     <button onclick={onnew}>New image</button>
   </header>
 
   <section>
-    <div class="label">View</div>
-    <div class="row">
-      <button onclick={() => (mode = 'side')} class:active={mode === 'side'} title="Side by side"
-        ><Columns2 size={14} /></button
-      >
-      <button onclick={() => (mode = 'split')} class:active={mode === 'split'} title="Split"
-        ><SquareSplitHorizontal size={14} /></button
-      >
-      <button onclick={onfit} title="Fit"><Maximize size={14} /></button>
+    <h2 class="section-head">View</h2>
+    <div class="body">
+      <div class="icon-row">
+        <button
+          class="icon-btn"
+          class:ui-on={mode === 'side'}
+          aria-pressed={mode === 'side'}
+          onclick={() => (mode = 'side')}
+          title="Side by side"><Columns2 size={16} /></button
+        >
+        <button
+          class="icon-btn"
+          class:ui-on={mode === 'split'}
+          aria-pressed={mode === 'split'}
+          onclick={() => (mode = 'split')}
+          title="Split"><SquareSplitHorizontal size={16} /></button
+        >
+        <button class="icon-btn" onclick={onfit} title="Fit"><Maximize size={16} /></button>
+        <button
+          class="unmodified"
+          class:ui-on={showUnmodified && hasAdjustments}
+          aria-pressed={showUnmodified}
+          disabled={!hasAdjustments}
+          title={hasAdjustments
+            ? 'Show the input without Input adjustments (view only)'
+            : 'No Input adjustments are active'}
+          onclick={() => (showUnmodified = !showUnmodified)}>Unmodified</button
+        >
+      </div>
     </div>
   </section>
 
   <section>
-    <div class="label">Vectorize</div>
-    <label>
-      Colors
-      <select
-        value={options.colorCount === 'auto' ? 'auto' : String(options.colorCount)}
-        onchange={(e) => {
-          const v = (e.target as HTMLSelectElement).value
-          options.colorCount = v === 'auto' ? 'auto' : Number(v)
+    <h2 class="section-head">Vectorize</h2>
+    <div class="body">
+      <label class="select-row">
+        <span class="name">Colors</span>
+        <select
+          value={options.colorCount === 'auto' ? 'auto' : String(options.colorCount)}
+          onchange={(e) => {
+            const v = (e.target as HTMLSelectElement).value
+            options.colorCount = v === 'auto' ? 'auto' : Number(v)
+            onchange()
+          }}
+        >
+          <option value="auto">auto</option>
+          {#each Array.from({ length: 15 }, (_, i) => i + 2) as k}
+            <option value={String(k)}>{k}</option>
+          {/each}
+        </select>
+      </label>
+      {#if palette && palette.length >= 3}
+        <div class="swatches">
+          {#each { length: palette.length / 3 } as _, i}
+            {@const effective = options.colorOverrides?.[i] ?? rgbHex(palette, i)}
+            <label
+              class="swatch"
+              class:overridden={!!options.colorOverrides?.[i]}
+              title={effective}
+              style:background={effective}
+            >
+              <input
+                type="color"
+                value={effective}
+                oninput={(e) => setOverride(i, (e.target as HTMLInputElement).value)}
+              />
+            </label>
+          {/each}
+          {#if options.colorOverrides?.some(Boolean)}
+            <button class="link" onclick={clearOverrides}>Reset colors</button>
+          {/if}
+        </div>
+      {/if}
+      {@render slider('Smoothness', 'smoothness', 0, 1, 0.05, 2)}
+      {@render slider('Despeckle', 'despeckleSize', 1, 64, 1, 0)}
+      <!-- Max scales with the working image: gaps span scale× more pixels, so the
+           cap keeps the same ~6px physical bridge limit at native scale. -->
+      {@render slider('Gap closing', 'gapClosing', 0, maxGapClosing(scale), 1, 0)}
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-head">Input</h2>
+    <div class="body">
+      <!-- Below ×1 the resampler averages away paper texture and pixel noise, which
+           yields smoother shapes and fewer boundary points; above ×1 it gives thin
+           strokes more pixels to survive segmentation. -->
+      <label class="select-row">
+        <span class="name">Scale</span>
+        <select bind:value={scale} onchange={onscale}>
+          <option value={1 / 3}>×⅓</option><option value={0.5}>×½</option><option value={1}
+            >×1</option
+          ><option value={2}>×2</option><option value={3}>×3</option>
+        </select>
+      </label>
+      {@render slider('Black point', 'blackPoint', 0, 254, 1, 0)}
+      {@render slider('White point', 'whitePoint', 1, 255, 1, 0)}
+      <!-- Divides out a fitted lighting gradient, for photographed/scanned art where
+           the paper drifts bright enough on one side to break into blotches. -->
+      {@render slider('Flatten', 'flatten', 0, 1, 0.05, 2)}
+      {@render slider('Blur', 'blurRadius', 0, 10, 0.5, 1)}
+      {@render slider('Saturation', 'saturation', 0, 2, 0.05, 2)}
+      <button
+        class="reset"
+        onclick={() => {
+          options.blackPoint = 0
+          options.whitePoint = 255
+          options.blurRadius = 0
+          options.saturation = 1
+          options.flatten = 0
           onchange()
-        }}
+        }}>Reset</button
       >
-        <option value="auto">auto</option>
-        {#each Array.from({ length: 15 }, (_, i) => i + 2) as k}
-          <option value={String(k)}>{k}</option>
-        {/each}
-      </select>
-    </label>
-    {#if palette && palette.length >= 3}
-      <div class="swatches">
-        {#each { length: palette.length / 3 } as _, i}
-          {@const effective = options.colorOverrides?.[i] ?? rgbHex(palette, i)}
-          <label
-            class="swatch"
-            class:overridden={!!options.colorOverrides?.[i]}
-            title={effective}
-            style:background={effective}
-          >
-            <input
-              type="color"
-              value={effective}
-              oninput={(e) => setOverride(i, (e.target as HTMLInputElement).value)}
-            />
-          </label>
-        {/each}
-        {#if options.colorOverrides?.some(Boolean)}
-          <button class="reset-colors" onclick={clearOverrides}>reset colors</button>
-        {/if}
-      </div>
-    {/if}
-    <label>
-      Smoothness
-      <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.05"
-        bind:value={options.smoothness}
-        oninput={onchange}
-      />
-    </label>
-    <label>
-      Despeckle
-      <input
-        type="range"
-        min="1"
-        max="64"
-        step="1"
-        bind:value={options.despeckleSize}
-        oninput={onchange}
-      />
-    </label>
-    <!-- Max scales with the working image: gaps span scale× more pixels, so the
-         cap keeps the same ~6px physical bridge limit at native scale. -->
-    <label
-      >Gap closing <input
-        type="range"
-        min="0"
-        max={maxGapClosing(scale)}
-        step="1"
-        bind:value={options.gapClosing}
-        oninput={onchange}
-      /></label
-    >
+    </div>
   </section>
 
   <section>
-    <div class="label">Input</div>
-    <!-- Below ×1 the resampler averages away paper texture and pixel noise, which
-         yields smoother shapes and fewer boundary points; above ×1 it gives thin
-         strokes more pixels to survive segmentation. -->
-    <label>
-      Scale
-      <select bind:value={scale} onchange={onscale}>
-        <option value={1 / 3}>×⅓</option><option value={0.5}>×½</option><option value={1}>×1</option
-        ><option value={2}>×2</option><option value={3}>×3</option>
-      </select>
-    </label>
-    <label
-      >Black point <input
-        type="range"
-        min="0"
-        max="254"
-        step="1"
-        bind:value={options.blackPoint}
-        oninput={onchange}
-      /></label
-    >
-    <label
-      >White point <input
-        type="range"
-        min="1"
-        max="255"
-        step="1"
-        bind:value={options.whitePoint}
-        oninput={onchange}
-      /></label
-    >
-    <!-- Divides out a fitted lighting gradient, for photographed/scanned art where
-         the paper drifts bright enough on one side to break into blotches. -->
-    <label
-      >Flatten <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.05"
-        bind:value={options.flatten}
-        oninput={onchange}
-      /></label
-    >
-    <label
-      >Blur <input
-        type="range"
-        min="0"
-        max="10"
-        step="0.5"
-        bind:value={options.blurRadius}
-        oninput={onchange}
-      /></label
-    >
-    <label
-      >Saturation <input
-        type="range"
-        min="0"
-        max="2"
-        step="0.05"
-        bind:value={options.saturation}
-        oninput={onchange}
-      /></label
-    >
-    <button
-      onclick={() => {
-        options.blackPoint = 0
-        options.whitePoint = 255
-        options.blurRadius = 0
-        options.saturation = 1
-        options.flatten = 0
-        onchange()
-      }}>Reset</button
-    >
+    <h2 class="section-head">Output</h2>
+    <!-- Toggle buttons, not checkboxes: the view buttons above already say "on" by filling,
+         and one app expresses one idea one way (guide §6). -->
+    <div class="body toggles">
+      <button
+        class:ui-on={options.optimize}
+        aria-pressed={options.optimize}
+        onclick={() => {
+          options.optimize = !options.optimize
+          onchange()
+        }}>Optimize</button
+      >
+      <button
+        class:ui-on={options.stackedShapes}
+        aria-pressed={options.stackedShapes}
+        onclick={() => {
+          options.stackedShapes = !options.stackedShapes
+          onchange()
+        }}>Stacked shapes</button
+      >
+      <button
+        class:ui-on={options.mergePaths && !options.stackedShapes}
+        aria-pressed={options.mergePaths}
+        disabled={options.stackedShapes}
+        title={options.stackedShapes ? 'Not used with stacked shapes' : undefined}
+        onclick={() => {
+          options.mergePaths = !options.mergePaths
+          onchange()
+        }}>Merge colors</button
+      >
+      <button
+        class:ui-on={options.transparentBg && !options.stackedShapes}
+        aria-pressed={options.transparentBg}
+        disabled={options.stackedShapes}
+        title={options.stackedShapes ? 'Not used with stacked shapes' : undefined}
+        onclick={() => {
+          options.transparentBg = !options.transparentBg
+          onchange()
+        }}>Transparent bg</button
+      >
+    </div>
   </section>
 
-  <section>
-    <div class="label">Output</div>
-    <label class="check"
-      ><input type="checkbox" bind:checked={options.optimize} {onchange} /> Optimize</label
-    >
-    <label class="check"
-      ><input type="checkbox" bind:checked={options.stackedShapes} {onchange} /> Stacked shapes</label
-    >
-    <label class="check" class:disabled={options.stackedShapes}
-      ><input
-        type="checkbox"
-        bind:checked={options.mergePaths}
-        disabled={options.stackedShapes}
-        {onchange}
-      /> Merge colors</label
-    >
-    <label class="check" class:disabled={options.stackedShapes}
-      ><input
-        type="checkbox"
-        bind:checked={options.transparentBg}
-        disabled={options.stackedShapes}
-        {onchange}
-      /> Transparent bg</label
-    >
-  </section>
-
-  <button class="download" onclick={download} disabled={!svg}>Download SVG</button>
+  <div class="save">
+    <div class="save-buttons">
+      <button
+        class="btn-primary grow"
+        onclick={() => onsave(false)}
+        disabled={!svg}
+        title={savedName ? `Overwrite ${savedName}` : undefined}>Save SVG</button
+      >
+      {#if canSaveAs && savedName}
+        <button onclick={() => onsave(true)} disabled={!svg}>Save as…</button>
+      {/if}
+    </div>
+    {#if savedName}<p class="hint">Saves over {savedName}</p>{/if}
+    {#if saveStatus}<p class="hint" role="status">{saveStatus}</p>{/if}
+  </div>
 
   <footer>
     {#if notice}<p class="notice">{notice}</p>{/if}
@@ -279,7 +301,7 @@
           >{stats.pathCount} paths · {stats.pointCount} points · {totalMs(stats)} ms{#if svg}
             · {sizeKb(svg)}{/if}</span
         >
-        {#if stageMs(stats)}<span class="stages">{stageMs(stats)}</span>{/if}
+        {#if stageMs(stats)}<span>{stageMs(stats)}</span>{/if}
       </span>
     {/if}
   </footer>
@@ -289,94 +311,102 @@
   .cp {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    font-size: 11px;
-    color: var(--color-text-secondary);
     min-height: 100%;
-  }
-  header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  header strong {
     font-size: 12px;
-    font-weight: 600;
-    color: var(--color-text);
   }
-  .label {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-secondary);
-    margin-bottom: 0.4rem;
-  }
-  section label {
+  .top {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
-    margin: 0.3rem 0;
-    font-size: 11px;
+    height: 44px;
+    padding: 0 12px;
+    flex-shrink: 0;
   }
-  section label.check {
-    justify-content: flex-start;
-    gap: 0.5rem;
+  .top strong {
+    font-size: 14px;
+    font-weight: 600;
   }
-  .check.disabled {
-    opacity: 0.45;
-  }
-  .row {
+  /* A raised band like slop-vector-editor's panel headers: the boundary between sections is a
+     change of colour, not a 1px line one step from its background. */
+  .section-head {
+    margin: 0;
+    height: 32px;
     display: flex;
-    gap: 0.4rem;
-  }
-  .row button {
-    padding: 0;
-    width: 28px;
-    height: 28px;
-    display: inline-flex;
     align-items: center;
-    justify-content: center;
+    padding: 0 12px;
+    background: var(--color-raised);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-muted);
   }
-  .row button.active {
-    background: var(--color-accent);
-    color: var(--color-accent-text);
-    border-color: var(--color-accent);
+  .body {
+    padding: 8px 12px 12px;
+  }
+  .name {
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+  .select-row,
+  .slider-row {
+    display: grid;
+    align-items: center;
+    gap: 8px;
+    min-height: var(--ctl-h);
+    margin: 2px 0;
+  }
+  .select-row {
+    grid-template-columns: 1fr auto;
+  }
+  .slider-row {
+    grid-template-columns: 76px minmax(0, 1fr) 32px;
+  }
+  .value {
+    color: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .icon-row {
+    display: flex;
+    gap: 4px;
   }
   .icon-btn {
+    width: var(--ctl-h);
     padding: 0;
-    width: 28px;
-    height: 28px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: none;
   }
-  .icon-btn:hover {
-    background: var(--color-surface-hover);
+  .unmodified {
+    margin-left: auto;
+  }
+  .toggles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .reset {
+    margin-top: 6px;
   }
   .swatches {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.4rem;
+    gap: 6px;
+    margin: 6px 0;
     align-items: center;
   }
   .swatch {
     width: 22px;
     height: 22px;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--color-line);
     border-radius: 4px;
     cursor: pointer;
     position: relative;
   }
+  /* Out of flow, so marking a swatch never moves its neighbours (guide §5). */
   .swatch.overridden::after {
     content: '';
     position: absolute;
     inset: -3px;
-    border: 2px solid var(--color-selection);
+    border: 2px solid var(--color-accent);
     border-radius: 6px;
   }
   .swatch input {
@@ -385,42 +415,48 @@
     height: 100%;
     cursor: pointer;
   }
-  .reset-colors {
-    background: none;
-    border: none;
-    color: var(--color-selection);
-    cursor: pointer;
-    font-size: 10px;
+  .link {
+    height: auto;
     padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-accent);
+    font-size: 11px;
   }
-  .download {
-    padding: 0.5rem;
-    background: var(--color-accent);
-    color: var(--color-accent-text);
-    border-color: var(--color-accent);
+  .link:hover:not(:disabled) {
+    color: var(--color-accent-hover);
   }
-  .download:hover:not(:disabled) {
-    opacity: 0.85;
+  .save {
+    padding: 12px;
+    border-top: 1px solid var(--color-line);
   }
-  .download:disabled {
-    opacity: 0.5;
-    cursor: default;
+  .save-buttons {
+    display: flex;
+    gap: 6px;
+  }
+  .grow {
+    flex: 1;
+  }
+  .hint {
+    margin: 6px 0 0;
+    color: var(--color-muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
   }
   .notice {
-    color: #b8860b;
+    margin: 0 0 4px;
+    color: var(--color-warn);
   }
   footer {
     margin-top: auto;
-    color: var(--color-text-muted);
-    font-size: 10px;
+    padding: 8px 12px;
+    color: var(--color-muted);
+    font-size: 11px;
   }
   footer .stats {
     display: flex;
     flex-direction: column;
     line-height: 1.35;
-  }
-  footer .stages {
-    color: var(--color-text-muted);
-    font-size: 10px;
+    font-variant-numeric: tabular-nums;
   }
 </style>

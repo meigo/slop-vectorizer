@@ -77,6 +77,7 @@
     <div
       class="layer"
       style:transform={`translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`}
+      style:--zoom={viewport.zoom}
     >
       <canvas bind:this={canvas} style:image-rendering="pixelated"></canvas>
     </div>
@@ -85,6 +86,7 @@
     <div
       class="layer"
       style:transform={`translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`}
+      style:--zoom={viewport.zoom}
     >
       {@html svg}
     </div>
@@ -120,11 +122,7 @@
     position: relative;
     overflow: hidden;
     height: 100%;
-    background: repeating-conic-gradient(
-        var(--color-border-light) 0% 25%,
-        var(--color-surface) 0% 50%
-      )
-      0 0 / 16px 16px;
+    background: var(--color-ground);
     touch-action: none;
     cursor: grab;
   }
@@ -137,11 +135,17 @@
     inset: 0;
     transform-origin: 0 0;
   }
+  /* The transparency checker sits on the artwork itself, not the pane, so only the image area is
+     light (black line art stays visible on the dark ground). Sized 16px / zoom in image space,
+     so its squares stay 16 screen pixels at any zoom. */
   .layer :global(svg),
   .layer canvas {
     display: block;
     width: auto;
     height: auto;
+    --check: calc(16px / var(--zoom, 1));
+    background: repeating-conic-gradient(var(--color-check-b) 0% 25%, var(--color-check-a) 0% 50%) 0
+      0 / var(--check) var(--check);
   }
   .divider {
     position: absolute;
@@ -156,6 +160,6 @@
     content: '';
     position: absolute;
     inset: 0 3px;
-    background: var(--color-selection);
+    background: var(--color-accent);
   }
 </style>
