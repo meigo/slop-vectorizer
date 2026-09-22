@@ -35,5 +35,8 @@
     "type": "git",
     "url": "https://github.com/meigo/slop-vectorizer.git"
   },
-  "homepage": "https://meigo.github.io/slop-vectorizer/"
+  "homepage": "https://meigo.github.io/slop-vectorizer/",
+  "dependencies": {
+    "fflate": "^0.8.3"
+  }
 }
