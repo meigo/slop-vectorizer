@@ -174,4 +174,24 @@ describe('hitTestList', () => {
     expect(hit([], -1, 10, 10)).toBe(null)
     expect(hit([A], -1, 50, 50)).toEqual({ index: 0, part: 'move' })
   })
+
+  describe('interior move cap', () => {
+    // `big` is topmost (last in the list) with an inner ring past the cap; `small`
+    // sits underneath it, well within the cap, at the same centre.
+    const big: LocalCircle = { ...base, cx: 0.5, cy: 0.5, inner: 0.4, outer: 0.45 } // inner 80px
+    const small: LocalCircle = { ...base, cx: 0.5, cy: 0.5, inner: 0.1, outer: 0.15 } // inner 20px
+    const capped = (px: number, py: number) =>
+      hitTestList([small, big], -1, 200, 100, V, px, py, 6, 50)
+
+    it('a smaller circle beneath the capped top circle wins the interior click', () => {
+      // (111,50): 11px from centre — past the centre-dot zone and clear of every ring,
+      // inside both interiors; big's inner (80) exceeds the 50px cap so it falls through
+      expect(capped(111, 50)).toEqual({ index: 0, part: 'move' })
+    })
+    it('nothing wins once the click is past the cap and outside every smaller circle', () => {
+      // (150,50): 50px from centre — inside big's interior only (past its cap), well
+      // outside small's outer ring (30) too
+      expect(capped(150, 50)).toBe(null)
+    })
+  })
 })
