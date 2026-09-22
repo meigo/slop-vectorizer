@@ -6,7 +6,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { DEFAULT_OPTIONS, type LocalCircle, type PipelineOptions } from '../types'
 
-export const PROJECT_VERSION = 1
+export const PROJECT_VERSION = 2
 
 export interface ProjectData {
   /** The original file's bytes, never re-encoded. */
@@ -14,8 +14,6 @@ export interface ProjectData {
   sourceName: string
   scale: number
   options: PipelineOptions
-  /** The remembered circle, kept even while the toggle is off. */
-  localSaved: LocalCircle | null
 }
 
 const MIME_EXT: Record<string, string> = {
@@ -45,6 +43,42 @@ function sanitizeColorOverrides(v: unknown): (string | null)[] | null {
   return v.map((c) => (typeof c === 'string' && HEX_COLOR.test(c) ? c : null))
 }
 
+const NUM = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
+
+/** One circle from an untrusted file, or null. Everything that reaches the pipeline must be
+ *  numbers in the right shape: a hand-edited or corrupt project must not crash a render. */
+function readCircle(v: unknown, hidden: boolean): LocalCircle | null {
+  if (typeof v !== 'object' || v === null) return null
+  const c = v as Record<string, unknown>
+  if (!NUM(c.cx) || !NUM(c.cy) || !NUM(c.inner) || !NUM(c.outer)) return null
+  if (!NUM(c.blackPoint) || !NUM(c.whitePoint)) return null
+  const inner = Math.max(0, c.inner as number)
+  return {
+    cx: c.cx as number,
+    cy: c.cy as number,
+    inner,
+    outer: Math.max(inner, c.outer as number),
+    blackPoint: c.blackPoint as number,
+    whitePoint: c.whitePoint as number,
+    hidden: typeof c.hidden === 'boolean' ? c.hidden : hidden,
+  }
+}
+
+/** v1 stored ONE circle (`options.localLevels`) plus the circle the UI remembered while the
+ *  toggle was off (`localSaved`). A remembered-but-off circle becomes a hidden one, so opening
+ *  an old project loses nothing. */
+function readCircles(
+  parsed: Record<string, unknown>,
+  saved: Partial<PipelineOptions>,
+): LocalCircle[] {
+  const list = (saved as { localCircles?: unknown }).localCircles
+  if (Array.isArray(list)) return list.map((c) => readCircle(c, false)).filter((c) => c !== null)
+  const active = readCircle((saved as { localLevels?: unknown }).localLevels, false)
+  if (active) return [active]
+  const remembered = readCircle(parsed.localSaved, true)
+  return remembered ? [remembered] : []
+}
+
 /** `logo.png` → `logo.vectorizer.zip`; distinct from the `logo.svg` the same session exports. */
 export function projectFileName(sourceName: string | undefined): string {
   return (baseName(sourceName) || 'vectorized') + '.vectorizer.zip'
@@ -62,7 +96,6 @@ export async function packProject(d: ProjectData): Promise<Blob> {
     sourceName: d.sourceName,
     scale: d.scale,
     options: d.options,
-    localSaved: d.localSaved,
   }
   const bytes = new Uint8Array(await d.source.arrayBuffer())
   const zip = zipSync({
@@ -120,15 +153,13 @@ export async function unpackProject(zip: Blob): Promise<ProjectData> {
   const options: PipelineOptions = {
     ...DEFAULT_OPTIONS,
     ...saved,
-    colorOverrides: sanitizeColorOverrides(saved.colorOverrides),
+    colorOverrides: sanitizeColorOverrides((saved as { colorOverrides?: unknown }).colorOverrides),
+    localCircles: readCircles(parsed, saved),
   }
-  const localSaved =
-    (parsed.localSaved as LocalCircle | null | undefined) ?? options.localCircles[0] ?? null
   return {
     source,
     sourceName: typeof parsed.sourceName === 'string' ? parsed.sourceName : '',
     scale: typeof parsed.scale === 'number' ? parsed.scale : 1,
     options,
-    localSaved,
   }
 }

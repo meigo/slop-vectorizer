@@ -150,7 +150,6 @@
       sourceName: sourceFile.name,
       scale,
       options: $state.snapshot(options),
-      localSaved: localSaved ? $state.snapshot(localSaved) : null,
     }
   }
 
@@ -226,7 +225,7 @@
     forgetSave()
     forgetProjectSave()
     options = d.options
-    localSaved = d.localSaved
+    localSaved = d.options.localCircles[0] ?? null
     localOn = d.options.localCircles.length > 0
     lastPalette = null
     baseImage = null
