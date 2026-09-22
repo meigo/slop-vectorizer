@@ -4,22 +4,33 @@
   import type { Viewport } from './viewport.svelte'
   import { pinchStep, type Point } from './viewportMath'
   import LocalGizmo from './LocalGizmo.svelte'
-  import { applyDrag, cursorFor, hitSlop, hitTest, toScreen, type GizmoPart } from './localGizmo'
+  import {
+    applyDrag,
+    cursorFor,
+    hitSlop,
+    hitTestList,
+    toScreen,
+    type GizmoPart,
+  } from './localGizmo'
 
   let {
     image,
     svg,
     viewport,
-    local = null,
+    circles = [],
+    selected = -1,
     size = null,
-    onlocal,
+    onselect,
+    oncircle,
   }: {
     image: RasterImage
     svg: string
     viewport: Viewport
-    local?: LocalCircle | null
+    circles?: LocalCircle[]
+    selected?: number
     size?: { width: number; height: number } | null
-    onlocal?: (l: LocalCircle) => void
+    onselect?: (i: number) => void
+    oncircle?: (i: number, c: LocalCircle) => void
   } = $props()
 
   let divider = $state(50) // percent
@@ -29,14 +40,18 @@
   const pointers = new Map<number, Point>()
   let draggingDivider = false
   const coarse = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches
-  // A gizmo drag in progress: which pointer, what it grabbed, and where it started.
-  let gz: { id: number; part: GizmoPart; start: LocalCircle; from: Point } | null = null
+  // A gizmo drag in progress: which pointer, which circle/part it grabbed, and where it started.
+  let gz: { id: number; index: number; part: GizmoPart; start: LocalCircle; from: Point } | null =
+    null
   let hoverCursor = $state<string | null>(null)
-  const circle = $derived(local && size ? toScreen(local, size.width, size.height, viewport) : null)
 
   function panePoint(e: PointerEvent): Point {
     const r = container.getBoundingClientRect()
     return { x: e.clientX - r.left, y: e.clientY - r.top }
+  }
+  function moveCap(): number {
+    const r = container.getBoundingClientRect()
+    return Math.min(r.width, r.height) / 2
   }
 
   $effect(() => {
@@ -60,14 +75,31 @@
   function down(e: PointerEvent) {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    // Only a lone pointer can grab the gizmo; a second finger turns it into a pinch.
     const p = panePoint(e)
-    const r = container.getBoundingClientRect()
-    const part =
-      pointers.size === 1 && circle
-        ? hitTest(circle, p.x, p.y, hitSlop(coarse), Math.min(r.width, r.height) / 2)
+    const hit =
+      pointers.size === 1 && size
+        ? hitTestList(
+            circles,
+            selected,
+            size.width,
+            size.height,
+            viewport,
+            p.x,
+            p.y,
+            hitSlop(coarse),
+            moveCap(),
+          )
         : null
-    gz = part && local ? { id: e.pointerId, part, start: { ...local }, from: p } : null
+    if (hit && hit.index !== selected) onselect?.(hit.index)
+    gz = hit
+      ? {
+          id: e.pointerId,
+          index: hit.index,
+          part: hit.part,
+          start: { ...circles[hit.index] },
+          from: p,
+        }
+      : null
   }
   function move(e: PointerEvent) {
     if (draggingDivider) {
@@ -76,7 +108,8 @@
       return
     }
     if (gz && gz.id === e.pointerId && size) {
-      onlocal?.(
+      oncircle?.(
+        gz.index,
         applyDrag(gz.start, gz.part, size.width, size.height, viewport, gz.from, panePoint(e)),
       )
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -84,11 +117,27 @@
     }
     if (e.pointerType === 'mouse' && e.buttons === 0) {
       const p = panePoint(e)
-      const r = container.getBoundingClientRect()
-      const part = circle
-        ? hitTest(circle, p.x, p.y, hitSlop(coarse), Math.min(r.width, r.height) / 2)
+      const hit = size
+        ? hitTestList(
+            circles,
+            selected,
+            size.width,
+            size.height,
+            viewport,
+            p.x,
+            p.y,
+            hitSlop(coarse),
+            moveCap(),
+          )
         : null
-      hoverCursor = part && circle ? cursorFor(part, circle, p.x, p.y) : null
+      hoverCursor = hit
+        ? cursorFor(
+            hit.part,
+            toScreen(circles[hit.index], size!.width, size!.height, viewport),
+            p.x,
+            p.y,
+          )
+        : null
     }
     const prev = pointers.get(e.pointerId)
     if (!prev) return
@@ -144,7 +193,14 @@
       {@html svg}
     </div>
   </div>
-  {#if circle}<LocalGizmo c={circle} state="selected" />{/if}
+  {#if size}
+    {#each circles as c, i (i)}
+      <LocalGizmo
+        c={toScreen(c, size.width, size.height, viewport)}
+        state={c.hidden ? 'hidden' : i === selected ? 'selected' : 'unselected'}
+      />
+    {/each}
+  {/if}
   <div
     class="divider"
     style:left={`${divider}%`}

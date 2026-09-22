@@ -41,33 +41,43 @@
   let mode = $state<'side' | 'split'>('side')
   // View-only: show the decoded input without pre-effects. Never affects the output.
   let showUnmodified = $state(false)
-  // Local levels: the circle is remembered while off, so re-enabling restores it; only the
-  // pipeline option goes null. First enable places it on the visible area with the current
-  // global points, so turning it on changes nothing until a local slider moves.
-  let localOn = $state(false)
-  let localSaved = $state<LocalCircle | null>(null)
-  function applyLocal() {
-    options.localCircles = localOn && localSaved ? [$state.snapshot(localSaved)] : []
+  // The circles live in the options (they are pipeline input); only the selection is view state.
+  let selected = $state(-1)
+
+  function setCircles(next: LocalCircle[]) {
+    options.localCircles = next
     rerun()
   }
-  function toggleLocal() {
-    localOn = !localOn
+  function addCircle() {
     const img = displayImage
-    if (localOn && !localSaved && img)
-      localSaved = initialLocal(
-        viewport,
-        paneW(),
-        viewsH,
-        img.width,
-        img.height,
-        options.blackPoint,
-        options.whitePoint,
-      )
-    applyLocal()
+    if (!img) return
+    const c = initialLocal(
+      viewport,
+      paneW(),
+      viewsH,
+      img.width,
+      img.height,
+      options.blackPoint,
+      options.whitePoint,
+    )
+    setCircles([...$state.snapshot(options.localCircles), c])
+    selected = options.localCircles.length - 1
   }
-  function setLocal(l: LocalCircle) {
-    localSaved = l
-    applyLocal()
+  function deleteCircle() {
+    if (selected < 0) return
+    const next = $state.snapshot(options.localCircles).filter((_, i) => i !== selected)
+    setCircles(next)
+    selected = Math.min(selected, next.length - 1)
+  }
+  function toggleHidden(i: number) {
+    const next = $state.snapshot(options.localCircles)
+    next[i] = { ...next[i], hidden: !next[i].hidden }
+    setCircles(next)
+  }
+  function updateCircle(i: number, c: LocalCircle) {
+    const next = $state.snapshot(options.localCircles)
+    next[i] = c
+    setCircles(next)
   }
   let viewsW = $state(0),
     viewsH = $state(0)
@@ -225,8 +235,7 @@
     forgetSave()
     forgetProjectSave()
     options = d.options
-    localSaved = d.options.localCircles[0] ?? null
-    localOn = d.options.localCircles.length > 0
+    selected = d.options.localCircles.length > 0 ? 0 : -1
     lastPalette = null
     baseImage = null
     image = null
@@ -488,26 +497,32 @@
           image={displayImage}
           svg={sizedSvg}
           {viewport}
-          local={localOn ? localSaved : null}
+          circles={options.localCircles}
+          {selected}
           size={displayImage}
-          onlocal={setLocal}
+          onselect={(i) => (selected = i)}
+          oncircle={updateCircle}
         />
       {:else}
         <ImagePane
           image={displayImage}
           label={adjusted ? 'Adjusted' : 'Original'}
           {viewport}
-          local={localOn ? localSaved : null}
+          circles={options.localCircles}
+          {selected}
           size={displayImage}
-          onlocal={setLocal}
+          onselect={(i) => (selected = i)}
+          oncircle={updateCircle}
         />
         <ImagePane
           svg={result ? sizedSvg : null}
           label="SVG"
           {viewport}
-          local={localOn ? localSaved : null}
+          circles={options.localCircles}
+          {selected}
           size={displayImage}
-          onlocal={setLocal}
+          onselect={(i) => (selected = i)}
+          oncircle={updateCircle}
         />
       {/if}
       {#if stage}<span class="stage-pill">Vectorizing… ({stage})</span>{/if}
@@ -529,10 +544,13 @@
         {projectSavedName}
         {mod}
         onopen={openProjectPicker}
-        {localOn}
-        local={localSaved}
-        ontogglelocal={toggleLocal}
-        onlocal={setLocal}
+        circles={options.localCircles}
+        {selected}
+        onadd={addCircle}
+        ondelete={deleteCircle}
+        onselect={(i) => (selected = i)}
+        ontogglehidden={toggleHidden}
+        oncircle={updateCircle}
         onsave={save}
         onsaveproject={saveProject}
         onchange={rerun}
@@ -553,8 +571,7 @@
           stage = null
           fittedW = 0
           fittedH = 0
-          localOn = false
-          localSaved = null
+          selected = -1
           options.localCircles = []
         }}
       />

@@ -1,6 +1,14 @@
 <!-- src/lib/ControlsPanel.svelte -->
 <script lang="ts">
-  import { Columns2, SquareSplitHorizontal, Maximize } from '@lucide/svelte'
+  import {
+    Columns2,
+    SquareSplitHorizontal,
+    Maximize,
+    Eye,
+    EyeOff,
+    Plus,
+    Trash2,
+  } from '@lucide/svelte'
   import type { LocalCircle, PipelineOptions, PipelineStats } from '../types'
   import { maxGapClosing } from './decode'
   import FileMenu from './FileMenu.svelte'
@@ -31,8 +39,8 @@
     saveStatus,
     projectSavedName,
     mod,
-    localOn,
-    local,
+    circles,
+    selected,
     onchange,
     onscale,
     onfit,
@@ -40,8 +48,11 @@
     onopen,
     onsave,
     onsaveproject,
-    ontogglelocal,
-    onlocal,
+    onadd,
+    ondelete,
+    onselect,
+    ontogglehidden,
+    oncircle,
   }: {
     options: PipelineOptions
     scale: number
@@ -62,9 +73,8 @@
     projectSavedName: string | null
     /** '⌘' or 'Ctrl+', for the menu's shortcut hints. */
     mod: string
-    localOn: boolean
-    /** The remembered circle; kept while off so re-enabling restores it. */
-    local: LocalCircle | null
+    circles: LocalCircle[]
+    selected: number
     onchange: () => void
     onscale: () => void
     onfit: () => void
@@ -72,8 +82,11 @@
     onopen: () => void
     onsave: (asNew: boolean) => void
     onsaveproject: (asNew: boolean) => void
-    ontogglelocal: () => void
-    onlocal: (l: LocalCircle) => void
+    onadd: () => void
+    ondelete: () => void
+    onselect: (i: number) => void
+    ontogglehidden: (i: number) => void
+    oncircle: (i: number, c: LocalCircle) => void
   } = $props()
 
   const rgbHex = (p: number[], i: number) =>
@@ -130,22 +143,22 @@
   </label>
 {/snippet}
 
-{#snippet localSlider(label: string, key: 'blackPoint' | 'whitePoint', min: number, max: number)}
-  {#if local}
-    <label class="slider-row">
-      <span class="name">{label}</span>
-      <input
-        type="range"
-        {min}
-        {max}
-        step="1"
-        value={local[key]}
-        style={sliderFill(local[key], min, max)}
-        oninput={(e) => onlocal({ ...local!, [key]: Number((e.target as HTMLInputElement).value) })}
-      />
-      <span class="value">{local[key]}</span>
-    </label>
-  {/if}
+{#snippet circleSlider(label: string, key: 'blackPoint' | 'whitePoint', min: number, max: number)}
+  {@const c = circles[selected]}
+  <label class="slider-row">
+    <span class="name">{label}</span>
+    <input
+      type="range"
+      {min}
+      {max}
+      step="1"
+      value={c[key]}
+      style={sliderFill(c[key], min, max)}
+      oninput={(e) =>
+        oncircle(selected, { ...c, [key]: Number((e.target as HTMLInputElement).value) })}
+    />
+    <span class="value">{c[key]}</span>
+  </label>
 {/snippet}
 
 <div class="cp">
@@ -281,17 +294,50 @@
   </section>
 
   <section>
-    <h2 class="section-head">Local levels</h2>
+    <h2 class="section-head">
+      Local levels
+      <span class="head-actions">
+        <button class="icon-btn" title="Add a circle" aria-label="Add a circle" onclick={onadd}
+          ><Plus size={14} /></button
+        >
+        <button
+          class="icon-btn"
+          title="Delete the selected circle"
+          aria-label="Delete the selected circle"
+          disabled={selected < 0}
+          onclick={ondelete}><Trash2 size={14} /></button
+        >
+      </span>
+    </h2>
     <div class="body">
-      <button class="wide" class:ui-on={localOn} aria-pressed={localOn} onclick={ontogglelocal}
-        >Circle</button
-      >
-      {#if localOn}
-        {@render localSlider('Black point', 'blackPoint', 0, 254)}
-        {@render localSlider('White point', 'whitePoint', 1, 255)}
-        <p class="hint">
-          Drag the dot to move, the solid ring to resize, the dashed ring to soften.
-        </p>
+      {#if circles.length === 0}
+        <p class="hint">Add a circle to adjust the levels of one area.</p>
+      {:else}
+        <div class="rows">
+          {#each circles as c, i (i)}
+            <div class="row" class:sel={i === selected}>
+              <button
+                class="icon-btn"
+                title={c.hidden ? 'Show' : 'Hide'}
+                aria-label={c.hidden ? 'Show' : 'Hide'}
+                aria-pressed={!c.hidden}
+                onclick={() => ontogglehidden(i)}
+              >
+                {#if c.hidden}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+              </button>
+              <button class="name-btn" aria-pressed={i === selected} onclick={() => onselect(i)}
+                >Circle {i + 1}</button
+              >
+            </div>
+          {/each}
+        </div>
+        {#if selected >= 0 && circles[selected]}
+          {@render circleSlider('Black point', 'blackPoint', 0, 254)}
+          {@render circleSlider('White point', 'whitePoint', 1, 255)}
+          <p class="hint">
+            Drag the dot to move, the solid ring to resize, the dashed ring to soften.
+          </p>
+        {/if}
       {/if}
     </div>
   </section>
@@ -403,6 +449,36 @@
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--color-muted);
+    justify-content: space-between;
+  }
+  .head-actions {
+    display: flex;
+    gap: 2px;
+  }
+  .rows {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 6px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 4px;
+  }
+  .row.sel {
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    box-shadow: inset 2px 0 0 var(--color-accent);
+  }
+  .name-btn {
+    flex: 1;
+    justify-content: flex-start;
+    height: var(--ctl-h);
+    border: none;
+    background: none;
+  }
+  .name-btn:hover:not(:disabled) {
+    color: var(--color-text);
   }
   .body {
     padding: 8px 12px 12px;
@@ -448,10 +524,6 @@
   }
   .reset {
     margin-top: 6px;
-  }
-  .wide {
-    width: 100%;
-    margin-bottom: 4px;
   }
   .swatches {
     display: flex;
