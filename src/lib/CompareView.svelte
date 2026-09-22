@@ -61,7 +61,11 @@
     ;(e.target as Element).setPointerCapture(e.pointerId)
     // Only a lone pointer can grab the gizmo; a second finger turns it into a pinch.
     const p = panePoint(e)
-    const part = pointers.size === 1 && circle ? hitTest(circle, p.x, p.y, hitSlop(coarse)) : null
+    const r = container.getBoundingClientRect()
+    const part =
+      pointers.size === 1 && circle
+        ? hitTest(circle, p.x, p.y, hitSlop(coarse), Math.min(r.width, r.height) / 2)
+        : null
     gz = part && local ? { id: e.pointerId, part, start: { ...local }, from: p } : null
   }
   function move(e: PointerEvent) {
@@ -79,7 +83,10 @@
     }
     if (e.pointerType === 'mouse' && e.buttons === 0) {
       const p = panePoint(e)
-      const part = circle ? hitTest(circle, p.x, p.y, hitSlop(coarse)) : null
+      const r = container.getBoundingClientRect()
+      const part = circle
+        ? hitTest(circle, p.x, p.y, hitSlop(coarse), Math.min(r.width, r.height) / 2)
+        : null
       hoverCursor = part && circle ? cursorFor(part, circle, p.x, p.y) : null
     }
     const prev = pointers.get(e.pointerId)

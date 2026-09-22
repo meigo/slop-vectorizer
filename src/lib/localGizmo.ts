@@ -36,16 +36,27 @@ export function toScreen(l: LocalLevels, iw: number, ih: number, v: ViewXf): Scr
 
 /** Which part a pointer at (px,py) would grab. The dot wins, then the nearer ring (when both
  *  are in reach, the side of the inner ring decides: outside widens the edge, inside resizes);
- *  anywhere else inside the inner ring moves; outside is null (the pane pans). */
-export function hitTest(c: ScreenCircle, px: number, py: number, slop: number): GizmoPart | null {
+ *  anywhere else inside the inner ring moves, but only while the inner ring's screen radius is
+ *  under `maxMoveRadius` — past that (zoomed into a large circle) the interior falls through to
+ *  null so the pane can still pan; outside the inner ring is always null. */
+export function hitTest(
+  c: ScreenCircle,
+  px: number,
+  py: number,
+  slop: number,
+  maxMoveRadius: number,
+): GizmoPart | null {
   const d = Math.hypot(px - c.x, py - c.y)
+  // Half slop, not full: keeps a small circle's rings grabbable from just outside the dot,
+  // while a wider dot zone would swallow them (below ~8 px inner screen radius, 14 px on
+  // touch, the dot zone covers the ring anyway — zoom in to resize).
   if (d <= DOT_R + slop / 2) return 'move'
   const nearInner = Math.abs(d - c.inner) <= slop
   const nearOuter = Math.abs(d - c.outer) <= slop
   if (nearInner && nearOuter) return d > c.inner ? 'outer' : 'inner'
   if (nearInner) return 'inner'
   if (nearOuter) return 'outer'
-  return d < c.inner ? 'move' : null
+  return d < c.inner && c.inner < maxMoveRadius ? 'move' : null
 }
 
 /** The circle after dragging `part` from `from` to `to` (screen px), starting from `start`.

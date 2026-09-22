@@ -19,26 +19,49 @@ describe('toScreen', () => {
     expect(toScreen(L, 200, 100, V1)).toEqual({ x: 100, y: 50, inner: 20, outer: 40 })
     expect(toScreen(L, 200, 100, V2)).toEqual({ x: 230, y: 90, inner: 40, outer: 80 })
   })
+  it('is scale-invariant: a 2x re-decode at half zoom lands on the same screen spot', () => {
+    const half: ViewXf = { zoom: V2.zoom / 2, panX: V2.panX, panY: V2.panY }
+    expect(toScreen(L, 400, 200, half)).toEqual(toScreen(L, 200, 100, V2))
+  })
 })
 
 describe('hitTest', () => {
   const c = toScreen(L, 200, 100, V2) // (230,90), inner 40, outer 80
+  // Interior hit-testing in these existing cases is never capped.
+  const NO_CAP = Infinity
   it('finds the centre, the rings, the inside and nothing', () => {
-    expect(hitTest(c, 231, 91, 6)).toBe('move')
-    expect(hitTest(c, 230 + 40, 90, 6)).toBe('inner')
-    expect(hitTest(c, 230, 90 + 81, 6)).toBe('outer')
-    expect(hitTest(c, 230 + 25, 90, 6)).toBe('move')
-    expect(hitTest(c, 230 + 60, 90, 6)).toBe(null)
-    expect(hitTest(c, 230 + 200, 90, 6)).toBe(null)
+    expect(hitTest(c, 231, 91, 6, NO_CAP)).toBe('move')
+    expect(hitTest(c, 230 + 40, 90, 6, NO_CAP)).toBe('inner')
+    expect(hitTest(c, 230, 90 + 81, 6, NO_CAP)).toBe('outer')
+    expect(hitTest(c, 230 + 25, 90, 6, NO_CAP)).toBe('move')
+    expect(hitTest(c, 230 + 60, 90, 6, NO_CAP)).toBe(null)
+    expect(hitTest(c, 230 + 200, 90, 6, NO_CAP)).toBe(null)
   })
   it('with overlapping rings, outside grabs the outer and inside the inner', () => {
     const hard = { x: 0, y: 0, inner: 50, outer: 52 }
-    expect(hitTest(hard, 53, 0, 6)).toBe('outer')
-    expect(hitTest(hard, 48, 0, 6)).toBe('inner')
+    expect(hitTest(hard, 53, 0, 6, NO_CAP)).toBe('outer')
+    expect(hitTest(hard, 48, 0, 6, NO_CAP)).toBe('inner')
   })
   it('a wider touch slop reaches further', () => {
-    expect(hitTest(c, 230 + 40 + 15, 90, 6)).toBe(null)
-    expect(hitTest(c, 230 + 40 + 15, 90, 18)).not.toBe(null)
+    expect(hitTest(c, 230 + 40 + 15, 90, 6, NO_CAP)).toBe(null)
+    expect(hitTest(c, 230 + 40 + 15, 90, 18, NO_CAP)).not.toBe(null)
+  })
+  describe('interior move cap', () => {
+    // Zoomed in on a large circle, the inner ring's screen radius can exceed the pane's
+    // reach; above the cap the interior must fall through so the pane can still pan.
+    it('interior is move when the inner ring is small relative to the pane', () => {
+      expect(hitTest(c, 230 + 25, 90, 6, 200)).toBe('move')
+    })
+    it('interior is null once the inner ring exceeds the cap', () => {
+      expect(hitTest(c, 230 + 25, 90, 6, 30)).toBe(null)
+    })
+    it('the dot still grabs regardless of the cap', () => {
+      expect(hitTest(c, 231, 91, 6, 0)).toBe('move')
+    })
+    it('both rings still grab regardless of the cap', () => {
+      expect(hitTest(c, 230 + 40, 90, 6, 0)).toBe('inner')
+      expect(hitTest(c, 230, 90 + 81, 6, 0)).toBe('outer')
+    })
   })
 })
 
