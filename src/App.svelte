@@ -8,7 +8,14 @@
   import { Viewport } from './lib/viewport.svelte'
   import { VectorizerClient } from './lib/workerClient'
   import { fileToRasterImage, maxGapClosing } from './lib/decode'
-  import { DEFAULT_OPTIONS, type ClientResult, type RasterImage, type StageName } from './types'
+  import { initialLocal } from './lib/localGizmo'
+  import {
+    DEFAULT_OPTIONS,
+    type ClientResult,
+    type LocalLevels,
+    type RasterImage,
+    type StageName,
+  } from './types'
   import { remapOverrides } from './lib/paletteRemap'
   import { saveToFilesAvailable } from './lib/share'
   import { deliverFile, errorMessage, svgFileName, writeSvgFile } from './lib/saveFile'
@@ -18,6 +25,34 @@
   let mode = $state<'side' | 'split'>('side')
   // View-only: show the decoded input without pre-effects. Never affects the output.
   let showUnmodified = $state(false)
+  // Local levels: the circle is remembered while off, so re-enabling restores it; only the
+  // pipeline option goes null. First enable places it on the visible area with the current
+  // global points, so turning it on changes nothing until a local slider moves.
+  let localOn = $state(false)
+  let localSaved = $state<LocalLevels | null>(null)
+  function applyLocal() {
+    options.localLevels = localOn && localSaved ? $state.snapshot(localSaved) : null
+    rerun()
+  }
+  function toggleLocal() {
+    localOn = !localOn
+    const img = displayImage
+    if (localOn && !localSaved && img)
+      localSaved = initialLocal(
+        viewport,
+        paneW(),
+        viewsH,
+        img.width,
+        img.height,
+        options.blackPoint,
+        options.whitePoint,
+      )
+    applyLocal()
+  }
+  function setLocal(l: LocalLevels) {
+    localSaved = l
+    applyLocal()
+  }
   let viewsW = $state(0),
     viewsH = $state(0)
   let fittedW = 0,
@@ -251,10 +286,31 @@
   <div class="app-grid">
     <div class="views" class:side={twoColumn} bind:clientWidth={viewsW} bind:clientHeight={viewsH}>
       {#if result && displayImage && mode === 'split'}
-        <CompareView image={displayImage} svg={sizedSvg} {viewport} />
+        <CompareView
+          image={displayImage}
+          svg={sizedSvg}
+          {viewport}
+          local={localOn ? localSaved : null}
+          size={displayImage}
+          onlocal={setLocal}
+        />
       {:else}
-        <ImagePane image={displayImage} label={adjusted ? 'Adjusted' : 'Original'} {viewport} />
-        <ImagePane svg={result ? sizedSvg : null} label="SVG" {viewport} />
+        <ImagePane
+          image={displayImage}
+          label={adjusted ? 'Adjusted' : 'Original'}
+          {viewport}
+          local={localOn ? localSaved : null}
+          size={displayImage}
+          onlocal={setLocal}
+        />
+        <ImagePane
+          svg={result ? sizedSvg : null}
+          label="SVG"
+          {viewport}
+          local={localOn ? localSaved : null}
+          size={displayImage}
+          onlocal={setLocal}
+        />
       {/if}
       {#if stage}<span class="stage-pill">Vectorizing… ({stage})</span>{/if}
     </div>
@@ -272,6 +328,10 @@
         {savedName}
         {canSaveAs}
         {saveStatus}
+        {localOn}
+        local={localSaved}
+        ontogglelocal={toggleLocal}
+        onlocal={setLocal}
         onsave={save}
         onchange={rerun}
         onscale={handleScale}
@@ -290,6 +350,9 @@
           stage = null
           fittedW = 0
           fittedH = 0
+          localOn = false
+          localSaved = null
+          options.localLevels = null
         }}
       />
     </aside>

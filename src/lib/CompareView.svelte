@@ -1,10 +1,26 @@
 <!-- src/lib/CompareView.svelte -->
 <script lang="ts">
-  import type { RasterImage } from '../types'
+  import type { LocalLevels, RasterImage } from '../types'
   import type { Viewport } from './viewport.svelte'
   import { pinchStep, type Point } from './viewportMath'
+  import LocalGizmo from './LocalGizmo.svelte'
+  import { applyDrag, cursorFor, hitSlop, hitTest, toScreen, type GizmoPart } from './localGizmo'
 
-  let { image, svg, viewport }: { image: RasterImage; svg: string; viewport: Viewport } = $props()
+  let {
+    image,
+    svg,
+    viewport,
+    local = null,
+    size = null,
+    onlocal,
+  }: {
+    image: RasterImage
+    svg: string
+    viewport: Viewport
+    local?: LocalLevels | null
+    size?: { width: number; height: number } | null
+    onlocal?: (l: LocalLevels) => void
+  } = $props()
 
   let divider = $state(50) // percent
   let container: HTMLDivElement
@@ -12,6 +28,16 @@
   // Active touches/pointers by id: one pans, two pinch-zoom.
   const pointers = new Map<number, Point>()
   let draggingDivider = false
+  const coarse = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches
+  // A gizmo drag in progress: which pointer, what it grabbed, and where it started.
+  let gz: { id: number; part: GizmoPart; start: LocalLevels; from: Point } | null = null
+  let hoverCursor = $state<string | null>(null)
+  const circle = $derived(local && size ? toScreen(local, size.width, size.height, viewport) : null)
+
+  function panePoint(e: PointerEvent): Point {
+    const r = container.getBoundingClientRect()
+    return { x: e.clientX - r.left, y: e.clientY - r.top }
+  }
 
   $effect(() => {
     if (!canvas) return
@@ -33,12 +59,28 @@
   function down(e: PointerEvent) {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     ;(e.target as Element).setPointerCapture(e.pointerId)
+    // Only a lone pointer can grab the gizmo; a second finger turns it into a pinch.
+    const p = panePoint(e)
+    const part = pointers.size === 1 && circle ? hitTest(circle, p.x, p.y, hitSlop(coarse)) : null
+    gz = part && local ? { id: e.pointerId, part, start: { ...local }, from: p } : null
   }
   function move(e: PointerEvent) {
     if (draggingDivider) {
       const rect = container.getBoundingClientRect()
       divider = Math.min(98, Math.max(2, ((e.clientX - rect.left) / rect.width) * 100))
       return
+    }
+    if (gz && gz.id === e.pointerId && size) {
+      onlocal?.(
+        applyDrag(gz.start, gz.part, size.width, size.height, viewport, gz.from, panePoint(e)),
+      )
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      return
+    }
+    if (e.pointerType === 'mouse' && e.buttons === 0) {
+      const p = panePoint(e)
+      const part = circle ? hitTest(circle, p.x, p.y, hitSlop(coarse)) : null
+      hoverCursor = part && circle ? cursorFor(part, circle, p.x, p.y) : null
     }
     const prev = pointers.get(e.pointerId)
     if (!prev) return
@@ -55,6 +97,7 @@
     pointers.set(e.pointerId, cur)
   }
   function up(e: PointerEvent) {
+    if (gz?.id === e.pointerId) gz = null
     pointers.delete(e.pointerId)
     draggingDivider = false
   }
@@ -63,6 +106,7 @@
 <div
   class="compare"
   bind:this={container}
+  style:cursor={hoverCursor}
   onwheel={wheel}
   onpointerdown={down}
   onpointermove={move}
@@ -91,6 +135,7 @@
       {@html svg}
     </div>
   </div>
+  {#if circle}<LocalGizmo c={circle} />{/if}
   <div
     class="divider"
     style:left={`${divider}%`}

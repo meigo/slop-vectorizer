@@ -1,7 +1,7 @@
 <!-- src/lib/ControlsPanel.svelte -->
 <script lang="ts">
   import { Columns2, SquareSplitHorizontal, Maximize } from '@lucide/svelte'
-  import type { PipelineOptions, PipelineStats } from '../types'
+  import type { LocalLevels, PipelineOptions, PipelineStats } from '../types'
   import { maxGapClosing } from './decode'
   import { sliderFill } from './sliderFill'
 
@@ -28,11 +28,15 @@
     savedName,
     canSaveAs,
     saveStatus,
+    localOn,
+    local,
     onchange,
     onscale,
     onfit,
     onnew,
     onsave,
+    ontogglelocal,
+    onlocal,
   }: {
     options: PipelineOptions
     scale: number
@@ -49,11 +53,16 @@
     /** Whether a separate "Save as…" means anything: only with a save picker, i.e. not iPad. */
     canSaveAs: boolean
     saveStatus: string | null
+    localOn: boolean
+    /** The remembered circle; kept while off so re-enabling restores it. */
+    local: LocalLevels | null
     onchange: () => void
     onscale: () => void
     onfit: () => void
     onnew: () => void
     onsave: (asNew: boolean) => void
+    ontogglelocal: () => void
+    onlocal: (l: LocalLevels) => void
   } = $props()
 
   const rgbHex = (p: number[], i: number) =>
@@ -108,6 +117,24 @@
     />
     <span class="value">{options[key].toFixed(digits)}</span>
   </label>
+{/snippet}
+
+{#snippet localSlider(label: string, key: 'blackPoint' | 'whitePoint', min: number, max: number)}
+  {#if local}
+    <label class="slider-row">
+      <span class="name">{label}</span>
+      <input
+        type="range"
+        {min}
+        {max}
+        step="1"
+        value={local[key]}
+        style={sliderFill(local[key], min, max)}
+        oninput={(e) => onlocal({ ...local!, [key]: Number((e.target as HTMLInputElement).value) })}
+      />
+      <span class="value">{local[key]}</span>
+    </label>
+  {/if}
 {/snippet}
 
 <div class="cp">
@@ -230,6 +257,22 @@
           onchange()
         }}>Reset</button
       >
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-head">Local levels</h2>
+    <div class="body">
+      <button class="wide" class:ui-on={localOn} aria-pressed={localOn} onclick={ontogglelocal}
+        >Circle</button
+      >
+      {#if localOn}
+        {@render localSlider('Black point', 'blackPoint', 0, 254)}
+        {@render localSlider('White point', 'whitePoint', 1, 255)}
+        <p class="hint">
+          Drag the dot to move, the solid ring to resize, the dashed ring to soften.
+        </p>
+      {/if}
     </div>
   </section>
 
@@ -385,6 +428,10 @@
   }
   .reset {
     margin-top: 6px;
+  }
+  .wide {
+    width: 100%;
+    margin-bottom: 4px;
   }
   .swatches {
     display: flex;
