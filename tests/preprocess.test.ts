@@ -248,6 +248,24 @@ describe('local levels', () => {
   })
   const at = (img: RasterImage, x: number, y: number) => img.data[(y * img.width + x) * 4]
 
+  it('a hard edge (inner === outer) includes a pixel exactly on the ring', () => {
+    // centre 10.5 px, radius 5 px: pixel (15,10) has its centre at exactly d = 5
+    const out = preprocess(flat(20, 20, [50, 50, 50]), {
+      ...IDENTITY_PRE,
+      localLevels: {
+        cx: 0.525,
+        cy: 0.525,
+        inner: 0.25,
+        outer: 0.25,
+        blackPoint: 0,
+        whitePoint: 100,
+      },
+    })
+    expect(at(out, 15, 10)).toBe(at(out, 14, 10)) // on the ring = inside
+    expect(Math.abs(at(out, 14, 10) - 127.5)).toBeLessThanOrEqual(0.5) // 50 through local 0..100
+    expect(at(out, 16, 10)).toBe(50) // outside: global identity
+  })
+
   it('inside follows the local points, outside the global, the edge lies between', () => {
     const out = preprocess(flat(20, 20, [100, 100, 100]), {
       ...IDENTITY_PRE,

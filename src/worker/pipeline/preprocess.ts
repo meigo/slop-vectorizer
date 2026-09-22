@@ -368,7 +368,7 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
         const dx = x + 0.5 - lx
         const d2 = dx * dx + dy2
         // Squared-distance early-out: skip the sqrt entirely outside the outer ring.
-        if (d2 < lOut2) wt = localWeight(Math.sqrt(d2), lIn, lOut)
+        if (d2 <= lOut2) wt = localWeight(Math.sqrt(d2), lIn, lOut)
       }
       if (wt === 0) {
         out[p] = (r - black) * scale // Uint8ClampedArray clamps + rounds
