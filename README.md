@@ -33,7 +33,7 @@ Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 3
 ```bash
 npm install
 npm run dev            # local dev server
-npm run test           # vitest (85 tests, pipeline ground-truth based)
+npm run test           # vitest (218 tests, pipeline ground-truth based)
 npm run check          # svelte-check + typescript (incl. tests)
 npm run lint           # eslint
 npm run format         # prettier
