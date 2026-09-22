@@ -4,7 +4,7 @@ Client-side image vectorizer with sub-pixel edge recovery, inspired by [Vector M
 
 **Live: <https://meigo.github.io/slop-vectorizer/>**
 
-Everything runs in your browser. Images are never uploaded anywhere — the whole pipeline executes locally in a Web Worker.
+Everything runs in your browser. Images are never uploaded anywhere — the whole pipeline executes locally in a Web Worker. The last session (source image and settings) is kept in this browser's local storage so it can be continued, and clearing site data removes it.
 
 ![slop-vectorizer UI: an ink sketch on the left, its vectorized SVG with transparent background on the right, controls panel with palette swatches, pre-effects and output options](docs/ui-screenshot.webp)
 
