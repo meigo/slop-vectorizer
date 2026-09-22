@@ -2,9 +2,9 @@
 <!-- The start screen's offer to resume the autosaved session. Never restores by itself: an
      accidental reload must not skip the start screen, and New image must not destroy work. -->
 <script lang="ts">
-  import { savedAtLabel, type AutosaveRecord } from './autosave'
+  import { savedAtLabel, type AutosaveSummary } from './autosave'
 
-  let { rec, onopen }: { rec: AutosaveRecord; onopen: () => void } = $props()
+  let { rec, onopen }: { rec: AutosaveSummary; onopen: () => void } = $props()
 
   const thumbUrl = $derived(rec.thumb ? URL.createObjectURL(rec.thumb) : null)
   $effect(() => {

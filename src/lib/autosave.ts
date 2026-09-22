@@ -14,6 +14,14 @@ export interface AutosaveRecord {
   savedAt: number
 }
 
+/** What the Continue card needs — never the zip bytes, so they aren't pinned in memory for
+ *  the whole tab session just to render a start-screen card. */
+export interface AutosaveSummary {
+  sourceName: string
+  thumb: Blob | null
+  savedAt: number
+}
+
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, 1)
@@ -39,18 +47,20 @@ async function withStore<T>(
   }
 }
 
-export async function putAutosave(rec: AutosaveRecord): Promise<void> {
+export async function putAutosave(rec: AutosaveRecord): Promise<boolean> {
   try {
     await withStore('readwrite', (s) => s.put(rec, KEY))
+    return true
   } catch {
     // Storage unavailable (private window, blocked site data): nothing to tell the user.
+    return false
   }
 }
 
 export async function getAutosave(): Promise<AutosaveRecord | null> {
   try {
     const rec = await withStore<AutosaveRecord | undefined>('readonly', (s) => s.get(KEY))
-    return rec?.zip instanceof Blob ? rec : null
+    return rec?.zip instanceof Blob && typeof rec.savedAt === 'number' ? rec : null
   } catch {
     return null
   }
@@ -80,7 +90,7 @@ export async function makeThumb(image: RasterImage, max = 160): Promise<Blob | n
     full
       .getContext('2d')!
       .putImageData(
-        new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
+        new ImageData(image.data as Uint8ClampedArray<ArrayBuffer>, image.width, image.height),
         0,
         0,
       )
