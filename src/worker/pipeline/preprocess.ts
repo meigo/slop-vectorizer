@@ -1,4 +1,4 @@
-import type { RasterImage } from '../../types'
+import type { LocalLevels, RasterImage } from '../../types'
 
 export interface PreOptions {
   blackPoint: number
@@ -6,6 +6,7 @@ export interface PreOptions {
   blurRadius: number
   saturation: number
   flatten: number
+  localLevels: LocalLevels | null
 }
 
 export const IDENTITY_PRE: PreOptions = {
@@ -14,6 +15,13 @@ export const IDENTITY_PRE: PreOptions = {
   blurRadius: 0,
   saturation: 1,
   flatten: 0,
+  localLevels: null,
+}
+
+/** A circle whose points equal the global ones changes nothing. */
+function localIsNoop(o: PreOptions): boolean {
+  const l = o.localLevels
+  return !l || (l.blackPoint === o.blackPoint && l.whitePoint === o.whitePoint)
 }
 
 export function isIdentityPre(o: PreOptions): boolean {
@@ -22,8 +30,36 @@ export function isIdentityPre(o: PreOptions): boolean {
     o.whitePoint === 255 &&
     o.blurRadius === 0 &&
     o.saturation === 1 &&
-    o.flatten === 0
+    o.flatten === 0 &&
+    localIsNoop(o)
   )
+}
+
+/** The pre-effects without the local circle: what palette estimation sees, so moving the circle
+ *  never re-estimates the palette (and swatches/overrides stay put). */
+export function globalPre(o: PreOptions): PreOptions {
+  return { ...o, localLevels: null }
+}
+
+export function sameLocalLevels(a: LocalLevels | null, b: LocalLevels | null): boolean {
+  if (!a || !b) return a === b
+  return (
+    a.cx === b.cx &&
+    a.cy === b.cy &&
+    a.inner === b.inner &&
+    a.outer === b.outer &&
+    a.blackPoint === b.blackPoint &&
+    a.whitePoint === b.whitePoint
+  )
+}
+
+/** Local-levels strength at distance d: 1 inside inner, 0 beyond outer, smoothstep between
+ *  (no visible band at either ring). inner === outer is a hard edge. */
+export function localWeight(d: number, inner: number, outer: number): number {
+  if (d <= inner) return 1
+  if (d >= outer) return 0
+  const t = (outer - d) / (outer - inner)
+  return t * t * (3 - 2 * t)
 }
 
 const clampi = (i: number, n: number) => (i < 0 ? 0 : i >= n ? n - 1 : i)
@@ -290,8 +326,19 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
   const white = Math.max(opts.whitePoint, black + 1)
   const scale = 255 / (white - black)
   const sat = opts.saturation
+  // Local circle, in pixels. Each pixel is levelled with the global AND the local points and
+  // the two results are mixed by its weight — mixing outputs rather than points keeps the tone
+  // mapping monotonic everywhere, so the soft edge cannot halo.
+  const local = localIsNoop(opts) ? null : opts.localLevels!
+  const lBlack = local?.blackPoint ?? 0
+  const lScale = local ? 255 / (Math.max(local.whitePoint, lBlack + 1) - lBlack) : 1
+  const lx = (local?.cx ?? 0) * w
+  const ly = (local?.cy ?? 0) * h
+  const lIn = (local?.inner ?? 0) * w
+  const lOut = Math.max(local?.outer ?? 0, local?.inner ?? 0) * w
+  const lev = (v: number, b: number, s: number) => Math.min(255, Math.max(0, (v - b) * s))
   const out = new Uint8ClampedArray(working.length)
-  for (let p = 0; p < working.length; p += 4) {
+  for (let p = 0, i = 0; p < working.length; p += 4, i++) {
     let r = working[p],
       g = working[p + 1],
       b = working[p + 2]
@@ -301,9 +348,21 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
       g = lum + (g - lum) * sat
       b = lum + (b - lum) * sat
     }
-    out[p] = (r - black) * scale // Uint8ClampedArray clamps + rounds
-    out[p + 1] = (g - black) * scale
-    out[p + 2] = (b - black) * scale
+    const wt = local
+      ? localWeight(Math.hypot((i % w) + 0.5 - lx, ((i / w) | 0) + 0.5 - ly), lIn, lOut)
+      : 0
+    if (wt === 0) {
+      out[p] = (r - black) * scale // Uint8ClampedArray clamps + rounds
+      out[p + 1] = (g - black) * scale
+      out[p + 2] = (b - black) * scale
+    } else {
+      const gr = lev(r, black, scale),
+        gg = lev(g, black, scale),
+        gb = lev(b, black, scale)
+      out[p] = gr + (lev(r, lBlack, lScale) - gr) * wt
+      out[p + 1] = gg + (lev(g, lBlack, lScale) - gg) * wt
+      out[p + 2] = gb + (lev(b, lBlack, lScale) - gb) * wt
+    }
     out[p + 3] = 255
   }
   return { width: w, height: h, data: out }

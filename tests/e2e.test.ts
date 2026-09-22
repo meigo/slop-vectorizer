@@ -289,6 +289,22 @@ describe('vectorize round-trip', () => {
     const at2x = vectorize(upImg, opts, undefined, base)
     expect(fills(at2x.svg)).toEqual(fills(at1x.svg))
   })
+
+  it('local levels never change the palette when a palette source is given', () => {
+    const img = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
+    const fills = (svg: string) => [...svg.matchAll(/fill="(#[0-9a-f]+)"/g)].map((m) => m[1]).sort()
+    const plain = vectorize(img, DEFAULT_OPTIONS, undefined, img)
+    const local = vectorize(
+      img,
+      {
+        ...DEFAULT_OPTIONS,
+        localLevels: { cx: 0.5, cy: 0.5, inner: 0.2, outer: 0.3, blackPoint: 120, whitePoint: 200 },
+      },
+      undefined,
+      img,
+    )
+    expect(fills(local.svg)).toEqual(fills(plain.svg))
+  })
 })
 
 describe('stacked shapes e2e', () => {

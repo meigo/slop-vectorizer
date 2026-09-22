@@ -32,6 +32,16 @@ describe('firstDirtyStage', () => {
   it('stackedShapes change re-enters at fit', () => {
     expect(firstDirtyStage(base, { ...base, stackedShapes: true }, true)).toBe('fit')
   })
+  const circle = { cx: 0.5, cy: 0.5, inner: 0.1, outer: 0.2, blackPoint: 60, whitePoint: 200 }
+  it('localLevels change -> pre', () => {
+    expect(firstDirtyStage(base, { ...base, localLevels: circle }, true)).toBe('pre')
+    const on = { ...base, localLevels: circle }
+    expect(firstDirtyStage(on, { ...on, localLevels: { ...circle, cx: 0.6 } }, true)).toBe('pre')
+  })
+  it('an equal localLevels copy is not a change', () => {
+    const on = { ...base, localLevels: circle }
+    expect(firstDirtyStage(on, { ...on, localLevels: { ...circle } }, true)).toBe('fit')
+  })
 })
 
 describe('sameImageData', () => {

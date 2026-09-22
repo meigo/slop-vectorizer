@@ -5,7 +5,7 @@ import type {
   VectorResult,
   PipelineStats,
 } from '../../types'
-import { preprocess, isIdentityPre, type PreOptions } from './preprocess'
+import { preprocess, isIdentityPre, globalPre, type PreOptions } from './preprocess'
 import { estimatePalette } from './palette'
 import { segmentImage } from './segment'
 import { extractBoundaries, loopPointsOf } from './boundaries'
@@ -36,14 +36,16 @@ export function vectorize(
     blurRadius: options.blurRadius,
     saturation: options.saturation,
     flatten: options.flatten,
+    localLevels: options.localLevels,
   }
   const identity = isIdentityPre(preOpts)
   const src = identity ? image : stage('pre', () => preprocess(image, preOpts))
+  const palOpts = globalPre(preOpts)
   const palette = stage('palette', () => {
     const palInput = paletteImage
-      ? identity
+      ? isIdentityPre(palOpts)
         ? paletteImage
-        : preprocess(paletteImage, preOpts)
+        : preprocess(paletteImage, palOpts)
       : src
     return estimatePalette(palInput, options.colorCount)
   })

@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { preprocess, IDENTITY_PRE } from '../src/worker/pipeline/preprocess'
+import {
+  preprocess,
+  IDENTITY_PRE,
+  localWeight,
+  sameLocalLevels,
+  globalPre,
+} from '../src/worker/pipeline/preprocess'
 import { mulberry32 } from '../src/worker/pipeline/palette'
 import type { RasterImage } from '../src/types'
+import type { LocalLevels } from '../src/types'
 
 function flat(width: number, height: number, rgb: [number, number, number]): RasterImage {
   const data = new Uint8ClampedArray(width * height * 4)
@@ -121,7 +128,8 @@ describe('preprocess: flatten', () => {
         const t = (x / (w - 1) + y / (h - 1)) / 2
         let v = lo + (hi - lo) * t + (rnd() - 0.5) * 16
         if (art) {
-          if (x > w / 3 && x < (2 * w) / 3 && y > h / 3 && y < (2 * h) / 3) v = 235 // face
+          if (x > w / 3 && x < (2 * w) / 3 && y > h / 3 && y < (2 * h) / 3)
+            v = 235 // face
           else if (x > (3 * w) / 4 || y > (3 * h) / 4) if ((x + y) % 11 < 5) v = 20 // ink
         }
         const p = (y * w + x) * 4
@@ -203,5 +211,77 @@ describe('preprocess: flatten', () => {
     const img = litPaper(6, 6, 100, 200)
     const out = preprocess(img, { ...IDENTITY_PRE, flatten: 1 })
     for (let p = 0; p < img.data.length; p += 4) expect(out.data[p]).toBe(img.data[p])
+  })
+})
+
+describe('localWeight', () => {
+  it('is 1 inside the inner radius and 0 beyond the outer', () => {
+    expect(localWeight(0, 4, 6)).toBe(1)
+    expect(localWeight(4, 4, 6)).toBe(1)
+    expect(localWeight(6, 4, 6)).toBe(0)
+    expect(localWeight(99, 4, 6)).toBe(0)
+  })
+  it('falls monotonically across the soft edge', () => {
+    let prev = 1
+    for (let d = 4; d <= 6; d += 0.1) {
+      const w = localWeight(d, 4, 6)
+      expect(w).toBeLessThanOrEqual(prev)
+      prev = w
+    }
+    expect(localWeight(5, 4, 6)).toBeCloseTo(0.5)
+  })
+  it('is a hard edge when inner equals outer', () => {
+    expect(localWeight(3.99, 4, 4)).toBe(1)
+    expect(localWeight(4.01, 4, 4)).toBe(0)
+  })
+})
+
+describe('local levels', () => {
+  // 20x20 → circle centre (10,10) px, inner 4 px, outer 6 px
+  const circle = (blackPoint: number, whitePoint: number): LocalLevels => ({
+    cx: 0.5,
+    cy: 0.5,
+    inner: 0.2,
+    outer: 0.3,
+    blackPoint,
+    whitePoint,
+  })
+  const at = (img: RasterImage, x: number, y: number) => img.data[(y * img.width + x) * 4]
+
+  it('inside follows the local points, outside the global, the edge lies between', () => {
+    const out = preprocess(flat(20, 20, [100, 100, 100]), {
+      ...IDENTITY_PRE,
+      localLevels: circle(100, 200),
+    })
+    expect(at(out, 10, 10)).toBe(0) // local: 100 → black
+    expect(at(out, 0, 0)).toBe(100) // global identity
+    const edge = at(out, 15, 10) // pixel centre 5.5 px from the centre
+    expect(edge).toBeGreaterThan(0)
+    expect(edge).toBeLessThan(100)
+  })
+
+  it('local points equal to the global ones are an identity', () => {
+    const img = flat(8, 8, [100, 150, 200])
+    expect(preprocess(img, { ...IDENTITY_PRE, localLevels: circle(0, 255) })).toBe(img)
+  })
+
+  it('local points equal to non-identity global points change nothing', () => {
+    const img = flat(20, 20, [120, 120, 120])
+    const g = { ...IDENTITY_PRE, blackPoint: 40, whitePoint: 220 }
+    const a = preprocess(img, g)
+    const b = preprocess(img, { ...g, localLevels: circle(40, 220) })
+    expect(Array.from(b.data)).toEqual(Array.from(a.data))
+  })
+
+  it('sameLocalLevels compares by value', () => {
+    expect(sameLocalLevels(null, null)).toBe(true)
+    expect(sameLocalLevels(circle(1, 2), null)).toBe(false)
+    expect(sameLocalLevels(circle(1, 2), circle(1, 2))).toBe(true)
+    expect(sameLocalLevels(circle(1, 2), { ...circle(1, 2), cx: 0.4 })).toBe(false)
+  })
+
+  it('globalPre strips the circle and keeps everything else', () => {
+    const o = { ...IDENTITY_PRE, blackPoint: 9, localLevels: circle(1, 2) }
+    expect(globalPre(o)).toEqual({ ...IDENTITY_PRE, blackPoint: 9, localLevels: null })
   })
 })

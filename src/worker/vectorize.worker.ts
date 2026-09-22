@@ -9,7 +9,13 @@ import type {
   Boundaries,
   PipelineStats,
 } from '../types'
-import { preprocess, isIdentityPre, type PreOptions } from './pipeline/preprocess'
+import {
+  preprocess,
+  isIdentityPre,
+  globalPre,
+  sameLocalLevels,
+  type PreOptions,
+} from './pipeline/preprocess'
 import { estimatePalette } from './pipeline/palette'
 import { segmentImage } from './pipeline/segment'
 import { extractBoundaries, loopPointsOf } from './pipeline/boundaries'
@@ -30,7 +36,8 @@ export function firstDirtyStage(
     prev.whitePoint !== next.whitePoint ||
     prev.blurRadius !== next.blurRadius ||
     prev.saturation !== next.saturation ||
-    prev.flatten !== next.flatten
+    prev.flatten !== next.flatten ||
+    !sameLocalLevels(prev.localLevels, next.localLevels)
   )
     return 'pre'
   if (prev.colorCount !== next.colorCount) return 'palette'
@@ -85,8 +92,12 @@ function run(
     blurRadius: options.blurRadius,
     saturation: options.saturation,
     flatten: options.flatten,
+    localLevels: options.localLevels,
   }
   const identity = isIdentityPre(preOpts)
+  // The palette never sees the local circle (spec: palette ignores local levels).
+  const palOpts = globalPre(preOpts)
+  const palIdentity = isIdentityPre(palOpts)
   const preFieldsChanged =
     !prev ||
     prev.blackPoint !== options.blackPoint ||
@@ -112,9 +123,9 @@ function run(
     cache.palette = stage('palette', () => {
       const palBase = cache.palImage
       const palInput = palBase
-        ? identity
+        ? palIdentity
           ? palBase
-          : (cache.palPre ??= preprocess(palBase, preOpts))
+          : (cache.palPre ??= preprocess(palBase, palOpts))
         : src
       return estimatePalette(palInput, options.colorCount)
     })

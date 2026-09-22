@@ -4,6 +4,18 @@ export interface RasterImage {
   data: Uint8ClampedArray // RGBA, length = width*height*4
 }
 
+/** A soft-edged circle with its own black/white point, blended into the global levels.
+ *  Fractions: cx of image width, cy of image height, inner/outer of image WIDTH (so it stays
+ *  round and in place across scale changes). outer >= inner. */
+export interface LocalLevels {
+  cx: number
+  cy: number
+  inner: number // full-strength radius
+  outer: number // zero-strength radius
+  blackPoint: number // 0..254
+  whitePoint: number // 1..255
+}
+
 export interface PipelineOptions {
   colorCount: number | 'auto' // 2..16 when numeric
   smoothness: number // 0..1; scales Bézier fit tolerance
@@ -19,6 +31,7 @@ export interface PipelineOptions {
   gapClosing: number // 0–3 px, bridges dashed thin strokes
   colorOverrides: (string | null)[] | null // output recolor by palette index, '#rrggbb'; null = detected
   stackedShapes: boolean // solid shapes painted in containment order, no holes
+  localLevels: LocalLevels | null // null = off
 }
 
 export const DEFAULT_OPTIONS: PipelineOptions = {
@@ -36,6 +49,7 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
   gapClosing: 0,
   colorOverrides: null,
   stackedShapes: false,
+  localLevels: null,
 }
 
 export interface Palette {
