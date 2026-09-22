@@ -204,10 +204,44 @@ describe('v1 migration', () => {
   })
 
   it('sanitises circles from a hand-edited file', async () => {
+    const zeroInner = { ...old, inner: 0 }
+    const negInner = { ...old, inner: -5 }
     const back = await unpackProject(
-      v1({ localCircles: [old, 'nope', { ...old, cx: 'x' }] } as Record<string, unknown>),
+      v1({
+        localCircles: [old, 'nope', { ...old, cx: 'x' }, zeroInner, negInner],
+      } as Record<string, unknown>),
     )
-    // only well-formed circles survive; the rest are dropped rather than crashing a render
-    expect(back.options.localCircles).toEqual([{ ...old, hidden: false }])
+    // only well-formed circles survive; the rest are dropped rather than crashing a render.
+    // inner: 0 and inner: -5 are clamped to a tiny positive epsilon (spec: outer >= inner > 0).
+    expect(back.options.localCircles).toEqual([
+      { ...old, hidden: false },
+      { ...zeroInner, inner: 1e-6, hidden: false },
+      { ...negInner, inner: 1e-6, hidden: false },
+    ])
+  })
+})
+
+describe('circle list cap', () => {
+  it('caps a hand-edited list at 256 circles', async () => {
+    const many = Array.from({ length: 300 }, (_, i) => ({ ...circle, cx: i / 300 }))
+    const zip = new Blob([
+      zipSync({
+        'project.json': strToU8(
+          JSON.stringify({
+            app: 'slop-vectorizer',
+            version: 2,
+            sourceName: 'x.png',
+            scale: 1,
+            options: { localCircles: many },
+          }),
+        ),
+        'source.png': bytes,
+      }),
+    ])
+    const back = await unpackProject(zip)
+    expect(back.options.localCircles.length).toBe(256)
+    expect(back.options.localCircles).toEqual(
+      many.slice(0, 256).map((c) => ({ ...c, hidden: false })),
+    )
   })
 })

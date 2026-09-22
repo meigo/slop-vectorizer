@@ -52,7 +52,9 @@ function readCircle(v: unknown, hidden: boolean): LocalCircle | null {
   const c = v as Record<string, unknown>
   if (!NUM(c.cx) || !NUM(c.cy) || !NUM(c.inner) || !NUM(c.outer)) return null
   if (!NUM(c.blackPoint) || !NUM(c.whitePoint)) return null
-  const inner = Math.max(0, c.inner as number)
+  // outer >= inner > 0 (spec): a tiny positive epsilon keeps inner strictly above zero
+  // rather than permitting a degenerate zero-radius circle.
+  const inner = Math.max(1e-6, c.inner as number)
   return {
     cx: c.cx as number,
     cy: c.cy as number,
@@ -64,6 +66,11 @@ function readCircle(v: unknown, hidden: boolean): LocalCircle | null {
   }
 }
 
+// An untrusted, hand-edited project could carry an arbitrarily long circle list, which
+// would make the pre stage O(pixels × circles) and hang the worker; cap it well above any
+// realistic use.
+const MAX_CIRCLES = 256
+
 /** v1 stored ONE circle (`options.localLevels`) plus the circle the UI remembered while the
  *  toggle was off (`localSaved`). A remembered-but-off circle becomes a hidden one, so opening
  *  an old project loses nothing. */
@@ -72,7 +79,11 @@ function readCircles(
   saved: Partial<PipelineOptions>,
 ): LocalCircle[] {
   const list = (saved as { localCircles?: unknown }).localCircles
-  if (Array.isArray(list)) return list.map((c) => readCircle(c, false)).filter((c) => c !== null)
+  if (Array.isArray(list))
+    return list
+      .map((c) => readCircle(c, false))
+      .filter((c) => c !== null)
+      .slice(0, MAX_CIRCLES)
   const active = readCircle((saved as { localLevels?: unknown }).localLevels, false)
   if (active) return [active]
   const remembered = readCircle(parsed.localSaved, true)
