@@ -348,32 +348,42 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
   const lOut = Math.max(local?.outer ?? 0, local?.inner ?? 0) * w
   const lev = (v: number, b: number, s: number) => Math.min(255, Math.max(0, (v - b) * s))
   const out = new Uint8ClampedArray(working.length)
-  for (let p = 0, i = 0; p < working.length; p += 4, i++) {
-    let r = working[p],
-      g = working[p + 1],
-      b = working[p + 2]
-    if (sat !== 1) {
-      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-      r = lum + (r - lum) * sat
-      g = lum + (g - lum) * sat
-      b = lum + (b - lum) * sat
+  const lOut2 = lOut * lOut
+  for (let y = 0, p = 0; y < h; y++) {
+    // Hoisted once per row: the per-pixel work below only adds dx.
+    const dy = y + 0.5 - ly
+    const dy2 = dy * dy
+    for (let x = 0; x < w; x++, p += 4) {
+      let r = working[p],
+        g = working[p + 1],
+        b = working[p + 2]
+      if (sat !== 1) {
+        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        r = lum + (r - lum) * sat
+        g = lum + (g - lum) * sat
+        b = lum + (b - lum) * sat
+      }
+      let wt = 0
+      if (local) {
+        const dx = x + 0.5 - lx
+        const d2 = dx * dx + dy2
+        // Squared-distance early-out: skip the sqrt entirely outside the outer ring.
+        if (d2 < lOut2) wt = localWeight(Math.sqrt(d2), lIn, lOut)
+      }
+      if (wt === 0) {
+        out[p] = (r - black) * scale // Uint8ClampedArray clamps + rounds
+        out[p + 1] = (g - black) * scale
+        out[p + 2] = (b - black) * scale
+      } else {
+        const gr = lev(r, black, scale),
+          gg = lev(g, black, scale),
+          gb = lev(b, black, scale)
+        out[p] = gr + (lev(r, lBlack, lScale) - gr) * wt
+        out[p + 1] = gg + (lev(g, lBlack, lScale) - gg) * wt
+        out[p + 2] = gb + (lev(b, lBlack, lScale) - gb) * wt
+      }
+      out[p + 3] = 255
     }
-    const wt = local
-      ? localWeight(Math.hypot((i % w) + 0.5 - lx, ((i / w) | 0) + 0.5 - ly), lIn, lOut)
-      : 0
-    if (wt === 0) {
-      out[p] = (r - black) * scale // Uint8ClampedArray clamps + rounds
-      out[p + 1] = (g - black) * scale
-      out[p + 2] = (b - black) * scale
-    } else {
-      const gr = lev(r, black, scale),
-        gg = lev(g, black, scale),
-        gb = lev(b, black, scale)
-      out[p] = gr + (lev(r, lBlack, lScale) - gr) * wt
-      out[p + 1] = gg + (lev(g, lBlack, lScale) - gg) * wt
-      out[p + 2] = gb + (lev(b, lBlack, lScale) - gb) * wt
-    }
-    out[p + 3] = 255
   }
   return { width: w, height: h, data: out }
 }
