@@ -90,7 +90,7 @@
   let stage = $state<StageName | null>(null)
   let error = $state<string | null>(null)
   let notice = $state<string | null>(null)
-  let options = $state({ ...DEFAULT_OPTIONS, localCircles: [] })
+  let options = $state({ ...DEFAULT_OPTIONS, localCircles: [] as LocalCircle[] })
   let debounce: ReturnType<typeof setTimeout> | undefined
   let lastPalette: number[] | null = null
   let lastScale = 1
