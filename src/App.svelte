@@ -31,7 +31,7 @@
     makeThumb,
     putAutosave,
     SaveGeneration,
-    type AutosaveRecord,
+    type AutosaveSummary,
   } from './lib/autosave'
   import ContinueCard from './lib/ContinueCard.svelte'
 
@@ -179,15 +179,20 @@
     }
   }
 
-  /** Open a .zip project: unpack, then decode ×1 (the palette source) before the saved scale. */
-  async function openProject(file: File) {
+  /** Open a .zip project: unpack, prime the palette source at ×1 if the saved scale isn't
+   *  ×1, then decode once at the saved scale. */
+  async function openProject(file: File): Promise<boolean> {
+    const prevSource = sourceFile
     let d
     try {
       d = await unpackProject(file)
     } catch (e) {
       error = errorMessage(e)
-      return
+      return false
     }
+    // A newer openProject call already took over while this one was unpacking — don't let
+    // this call's stale continuation undo it.
+    if (sourceFile !== prevSource) return false
     const src = new File([d.source], d.sourceName || 'image', { type: d.source.type })
     sourceFile = src
     forgetSave()
@@ -201,21 +206,27 @@
     result = null
     fittedW = 0
     fittedH = 0
-    scale = 1
-    lastScale = 1
-    await decodeAndRun(src) // ×1 first: this is what the palette is estimated from
+    scale = d.scale
+    lastScale = d.scale
     if (d.scale !== 1) {
-      scale = d.scale
-      lastScale = d.scale
-      await decodeAndRun(src) // then the working scale; options already hold that scale's values
+      try {
+        baseImage = (await fileToRasterImage(src, 1)).image
+      } catch {
+        /* decodeAndRun reports a bad source */
+      }
     }
+    await decodeAndRun(src)
+    return true
   }
 
   // Autosave: one slot, written ~1s after the last change and only once a result has arrived, so
   // it never competes with the pipeline. New image never clears it — the next load replaces it.
   const autosaveGen = new SaveGeneration()
   let autosaveTimer: ReturnType<typeof setTimeout> | undefined
-  let resumable = $state<AutosaveRecord | null>(null)
+  // Only the summary the Continue card renders — never the zip bytes, so a full copy of the
+  // source image isn't pinned in memory for the tab's whole lifetime. resume() reads the
+  // bytes back from the slot on demand.
+  let resumable = $state<AutosaveSummary | null>(null)
 
   function scheduleAutosave() {
     clearTimeout(autosaveTimer)
@@ -228,25 +239,34 @@
     if (!d || !img) return
     const gen = autosaveGen.bump()
     try {
-      const [zip, thumb] = await Promise.all([packProject(d), makeThumb($state.snapshot(img))])
+      const [zip, thumb] = await Promise.all([packProject(d), makeThumb(img)])
       if (!autosaveGen.isCurrent(gen)) return // superseded by a newer write
       const rec = { zip, sourceName: d.sourceName, thumb, savedAt: Date.now() }
-      await putAutosave(rec)
-      if (autosaveGen.isCurrent(gen)) resumable = rec // keep the card in sync with the slot
+      const ok = await putAutosave(rec)
+      // keep the card in sync with the slot — but only once something was actually stored
+      if (ok && autosaveGen.isCurrent(gen))
+        resumable = { sourceName: rec.sourceName, thumb: rec.thumb, savedAt: rec.savedAt }
     } catch {
       // Autosave is best-effort; a failure must never interrupt the session.
     }
   }
 
   async function resume() {
-    const rec = resumable
-    if (!rec) return
-    resumable = null
-    await openProject(new File([rec.zip], 'autosave.zip', { type: 'application/zip' }))
+    if (!resumable) return
+    const rec = await getAutosave()
+    if (!rec) {
+      error = 'Could not load the autosaved session.'
+      return
+    }
+    const ok = await openProject(new File([rec.zip], 'autosave.zip', { type: 'application/zip' }))
+    if (ok) resumable = null // only once the restore actually succeeded — the start screen unmounts then anyway
   }
 
   $effect(() => {
-    void getAutosave().then((rec) => (resumable = rec))
+    void getAutosave().then(
+      (rec) =>
+        (resumable = rec && { sourceName: rec.sourceName, thumb: rec.thumb, savedAt: rec.savedAt }),
+    )
   })
 
   const stats = $derived(result?.stats ?? null)
