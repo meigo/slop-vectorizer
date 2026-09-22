@@ -7,8 +7,11 @@
   let { rec, onopen }: { rec: AutosaveRecord; onopen: () => void } = $props()
 
   const thumbUrl = $derived(rec.thumb ? URL.createObjectURL(rec.thumb) : null)
-  $effect(() => () => {
-    if (thumbUrl) URL.revokeObjectURL(thumbUrl)
+  $effect(() => {
+    const url = thumbUrl
+    return () => {
+      if (url) URL.revokeObjectURL(url)
+    }
   })
 </script>
 

@@ -230,7 +230,9 @@
     try {
       const [zip, thumb] = await Promise.all([packProject(d), makeThumb($state.snapshot(img))])
       if (!autosaveGen.isCurrent(gen)) return // superseded by a newer write
-      await putAutosave({ zip, sourceName: d.sourceName, thumb, savedAt: Date.now() })
+      const rec = { zip, sourceName: d.sourceName, thumb, savedAt: Date.now() }
+      await putAutosave(rec)
+      if (autosaveGen.isCurrent(gen)) resumable = rec // keep the card in sync with the slot
     } catch {
       // Autosave is best-effort; a failure must never interrupt the session.
     }
