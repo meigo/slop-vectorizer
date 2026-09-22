@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deliverFile, svgFileName, type DeliverDeps } from '../src/lib/saveFile'
+import { deliverFile, svgFileName, writeProjectFile, type DeliverDeps } from '../src/lib/saveFile'
 import type { ShareOutcome } from '../src/lib/share'
 
 describe('svgFileName', () => {
@@ -56,5 +56,31 @@ describe('deliverFile', () => {
   it("falls back to the dialog carrying the browser's message when sharing failed", async () => {
     const { d } = deps({ share: async () => ({ outcome: 'failed', error: new Error('no sheet') }) })
     expect(await deliverFile(file, d)).toEqual({ kind: 'ready', error: 'no sheet' })
+  })
+})
+
+describe('writeProjectFile', () => {
+  it('offers the project type and writes through the picked handle', async () => {
+    const written: Blob[] = []
+    let seen: unknown = null
+    const handle = {
+      name: 'logo.vectorizer.zip',
+      createWritable: async () => ({
+        write: async (b: Blob) => void written.push(b),
+        close: async () => {},
+      }),
+    }
+    ;(globalThis as { window?: unknown }).window = {
+      showSaveFilePicker: async (opts: unknown) => {
+        seen = opts
+        return handle
+      },
+    }
+    const blob = new Blob([new Uint8Array([1, 2])], { type: 'application/zip' })
+    const r = await writeProjectFile(blob, 'logo.vectorizer.zip', null, false)
+    expect(r).toEqual({ name: 'logo.vectorizer.zip', handle })
+    expect(written).toHaveLength(1)
+    expect(JSON.stringify(seen)).toContain('.zip')
+    delete (globalThis as { window?: unknown }).window
   })
 })

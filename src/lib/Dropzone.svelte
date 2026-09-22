@@ -26,7 +26,13 @@
 </script>
 
 <svelte:window onpaste={paste} />
-<input type="file" accept="image/*" hidden bind:this={fileInput} onchange={picked} />
+<input
+  type="file"
+  accept="image/*,.zip,application/zip"
+  hidden
+  bind:this={fileInput}
+  onchange={picked}
+/>
 <div
   class="dropzone"
   class:dragging
@@ -46,7 +52,7 @@
   role="button"
   tabindex="0"
 >
-  <p>Drop an image here, click to browse, or paste from clipboard</p>
+  <p>Drop an image or project here, click to browse, or paste from clipboard</p>
   {#if error}<p class="error">{error}</p>{/if}
 </div>
 

@@ -28,6 +28,7 @@
     savedName,
     canSaveAs,
     saveStatus,
+    projectSavedName,
     localOn,
     local,
     onchange,
@@ -35,6 +36,7 @@
     onfit,
     onnew,
     onsave,
+    onsaveproject,
     ontogglelocal,
     onlocal,
   }: {
@@ -53,6 +55,8 @@
     /** Whether a separate "Save as…" means anything: only with a save picker, i.e. not iPad. */
     canSaveAs: boolean
     saveStatus: string | null
+    /** The file Save project overwrites, after a first save; null = it asks where. */
+    projectSavedName: string | null
     localOn: boolean
     /** The remembered circle; kept while off so re-enabling restores it. */
     local: LocalLevels | null
@@ -61,6 +65,7 @@
     onfit: () => void
     onnew: () => void
     onsave: (asNew: boolean) => void
+    onsaveproject: (asNew: boolean) => void
     ontogglelocal: () => void
     onlocal: (l: LocalLevels) => void
   } = $props()
@@ -332,6 +337,19 @@
         <button onclick={() => onsave(true)} disabled={!svg}>Save as…</button>
       {/if}
     </div>
+    <div class="save-buttons project">
+      <button
+        class="grow"
+        onclick={() => onsaveproject(false)}
+        disabled={!svg}
+        title={projectSavedName
+          ? `Overwrite ${projectSavedName}`
+          : 'Save the image and all settings'}>Save project</button
+      >
+      {#if canSaveAs && projectSavedName}
+        <button onclick={() => onsaveproject(true)} disabled={!svg}>Save as…</button>
+      {/if}
+    </div>
     {#if savedName}<p class="hint">Saves over {savedName}</p>{/if}
     {#if saveStatus}<p class="hint" role="status">{saveStatus}</p>{/if}
   </div>
@@ -480,6 +498,9 @@
   .save-buttons {
     display: flex;
     gap: 6px;
+  }
+  .save-buttons.project {
+    margin-top: 6px;
   }
   .grow {
     flex: 1;

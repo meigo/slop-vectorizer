@@ -18,7 +18,14 @@
   } from './types'
   import { remapOverrides } from './lib/paletteRemap'
   import { saveToFilesAvailable } from './lib/share'
-  import { deliverFile, errorMessage, svgFileName, writeSvgFile } from './lib/saveFile'
+  import {
+    deliverFile,
+    errorMessage,
+    svgFileName,
+    writeProjectFile,
+    writeSvgFile,
+  } from './lib/saveFile'
+  import { packProject, projectFileName, unpackProject } from './lib/project'
 
   const client = new VectorizerClient()
   const viewport = new Viewport()
@@ -115,6 +122,84 @@
       saveStatus = r.handle ? `Saved ${r.name}` : `Downloaded ${r.name}`
     } catch (e) {
       error = `Save failed: ${errorMessage(e)}`
+    }
+  }
+
+  let projectHandle: FileSystemFileHandle | null = null
+  let projectSavedName = $state<string | null>(null)
+
+  function forgetProjectSave() {
+    projectHandle = null
+    projectSavedName = null
+  }
+
+  /** Everything needed to carry on working: the ORIGINAL file plus the settings. */
+  function projectData() {
+    if (!sourceFile) return null
+    return {
+      source: sourceFile,
+      sourceName: sourceFile.name,
+      scale,
+      options: $state.snapshot(options),
+      localSaved: localSaved ? $state.snapshot(localSaved) : null,
+    }
+  }
+
+  async function saveProject(asNew: boolean) {
+    const d = projectData()
+    if (!d) return
+    const name = projectFileName(d.sourceName)
+    saveStatus = null
+    try {
+      const zip = await packProject(d)
+      if (saveToFiles) {
+        const file = new File([zip], name, { type: 'application/zip' })
+        const r = await deliverFile(file)
+        if (r.kind === 'shared') saveStatus = `Sent ${name} to the share sheet`
+        else if (r.kind === 'downloaded') saveStatus = `Downloaded ${name}`
+        else if (r.kind === 'dismissed') saveStatus = 'Not saved — the share sheet was closed'
+        else shareReady = { file, error: r.error }
+        return
+      }
+      const r = await writeProjectFile(zip, name, asNew ? null : projectHandle, asNew)
+      if (!r || sourceFile !== d.source) return // cancelled, or a new image arrived meanwhile
+      projectHandle = r.handle
+      projectSavedName = r.handle ? r.name : null
+      saveStatus = r.handle ? `Saved ${r.name}` : `Downloaded ${r.name}`
+    } catch (e) {
+      error = `Save failed: ${errorMessage(e)}`
+    }
+  }
+
+  /** Open a .zip project: unpack, then decode ×1 (the palette source) before the saved scale. */
+  async function openProject(file: File) {
+    let d
+    try {
+      d = await unpackProject(file)
+    } catch (e) {
+      error = errorMessage(e)
+      return
+    }
+    const src = new File([d.source], d.sourceName || 'image', { type: d.source.type })
+    sourceFile = src
+    forgetSave()
+    forgetProjectSave()
+    options = d.options
+    localSaved = d.localSaved
+    localOn = d.options.localLevels !== null
+    lastPalette = null
+    baseImage = null
+    image = null
+    result = null
+    fittedW = 0
+    fittedH = 0
+    scale = 1
+    lastScale = 1
+    await decodeAndRun(src) // ×1 first: this is what the palette is estimated from
+    if (d.scale !== 1) {
+      scale = d.scale
+      lastScale = d.scale
+      await decodeAndRun(src) // then the working scale; options already hold that scale's values
     }
   }
 
@@ -223,9 +308,17 @@
     }
   }
 
+  const isProjectFile = (f: File) =>
+    f.name.toLowerCase().endsWith('.zip') || f.type === 'application/zip'
+
   function handleFile(file: File) {
+    if (isProjectFile(file)) {
+      void openProject(file)
+      return
+    }
     sourceFile = file
     forgetSave()
+    forgetProjectSave()
     void decodeAndRun(file)
   }
 
@@ -328,11 +421,13 @@
         {savedName}
         {canSaveAs}
         {saveStatus}
+        {projectSavedName}
         {localOn}
         local={localSaved}
         ontogglelocal={toggleLocal}
         onlocal={setLocal}
         onsave={save}
+        onsaveproject={saveProject}
         onchange={rerun}
         onscale={handleScale}
         onfit={fit}
@@ -340,6 +435,7 @@
           client.cancel()
           sourceFile = null
           forgetSave()
+          forgetProjectSave()
           scale = 1
           lastScale = 1
           preserveNextFraming = false

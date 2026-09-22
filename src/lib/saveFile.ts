@@ -17,6 +17,9 @@ declare global {
 }
 
 const TYPES: PickerType[] = [{ description: 'SVG image', accept: { 'image/svg+xml': ['.svg'] } }]
+const PROJECT_TYPES: PickerType[] = [
+  { description: 'slop-vectorizer project', accept: { 'application/zip': ['.zip'] } },
+]
 
 /** How long the object URL outlives the click. The browser only has to have STARTED the fetch by
  *  the time it is revoked, and on iPad a short revoke can kill a download it has just begun. */
@@ -43,36 +46,57 @@ export function downloadBlob(blob: Blob, name: string): void {
 
 const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'AbortError'
 
-async function writeTo(handle: FileSystemFileHandle, text: string): Promise<void> {
+async function writeTo(handle: FileSystemFileHandle, data: Blob | string): Promise<void> {
   const w = await handle.createWritable()
-  await w.write(text)
+  await w.write(data)
   await w.close()
 }
 
-/** Desktop save. Writes in place when there is a handle and `asNew` is false; otherwise asks
- *  where (Chromium) or downloads. Resolves null when the user cancels the picker. */
-export async function writeSvgFile(
-  text: string,
+/** Save a blob through the best path this browser has: an existing handle (overwrite in place),
+ *  the save picker (Chromium), or a download. Resolves null when the user cancels the picker. */
+async function writeFile(
+  blob: Blob,
   name: string,
   handle: FileSystemFileHandle | null,
   asNew: boolean,
+  types: PickerType[],
 ): Promise<{ name: string; handle: FileSystemFileHandle | null } | null> {
   if (handle && !asNew) {
-    await writeTo(handle, text)
+    await writeTo(handle, blob)
     return { name: handle.name, handle }
   }
   if (window.showSaveFilePicker) {
     try {
-      const h = await window.showSaveFilePicker({ suggestedName: name, types: TYPES })
-      await writeTo(h, text)
+      const h = await window.showSaveFilePicker({ suggestedName: name, types })
+      await writeTo(h, blob)
       return { name: h.name, handle: h }
     } catch (err) {
       if (isAbort(err)) return null
       throw err
     }
   }
-  downloadBlob(new Blob([text], { type: 'image/svg+xml' }), name)
+  downloadBlob(blob, name)
   return { name, handle: null }
+}
+
+/** Desktop save. Writes in place when there is a handle and `asNew` is false; otherwise asks
+ *  where (Chromium) or downloads. Resolves null when the user cancels the picker. */
+export function writeSvgFile(
+  text: string,
+  name: string,
+  handle: FileSystemFileHandle | null,
+  asNew: boolean,
+) {
+  return writeFile(new Blob([text], { type: 'image/svg+xml' }), name, handle, asNew, TYPES)
+}
+
+export function writeProjectFile(
+  blob: Blob,
+  name: string,
+  handle: FileSystemFileHandle | null,
+  asNew: boolean,
+) {
+  return writeFile(blob, name, handle, asNew, PROJECT_TYPES)
 }
 
 /** What happened to a file sent toward Save to Files. `ready` means the caller should raise the
