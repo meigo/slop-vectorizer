@@ -246,7 +246,7 @@ describe('extractBoundaries: region emission order', () => {
   it('hundreds of interleaved regions stay in first-pixel order', () => {
     for (const seed of [1, 7, 99, 12345]) {
       let s = seed
-      const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)
+      const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
       const data = new Uint8ClampedArray(64 * 64 * 4).fill(255)
       for (let i = 0; i < 64 * 64; i++) {
         const v = rnd() < 0.5 ? 0 : 255
