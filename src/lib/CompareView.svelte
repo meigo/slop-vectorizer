@@ -52,6 +52,7 @@
   })
 
   function wheel(e: WheelEvent) {
+    hoverCursor = null // the circle moves under a still mouse as the view zooms
     e.preventDefault()
     const rect = container.getBoundingClientRect()
     viewport.wheelAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY)
@@ -119,6 +120,7 @@
   onpointermove={move}
   onpointerup={up}
   onpointercancel={up}
+  onpointerleave={() => (hoverCursor = null)}
   role="img"
   aria-label="Compare original and vectorized"
 >
