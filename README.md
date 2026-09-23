@@ -2,6 +2,8 @@
 
 Client-side image vectorizer with sub-pixel edge recovery, inspired by [Vector Magic](https://vectormagic.com/)'s inverse-rendering approach. Drop a logo, sketch, or flat-art image — get a clean SVG whose curves land where the artwork's edges actually are, not on the pixel grid.
 
+**Adjust the levels where the drawing needs it.** Drop soft-edged circles on a face, a hand, a dark corner of the paper — each with its own black and white point — and the trace re-runs live. Tracers normally give you one global threshold that has to serve the whole page: lift it to catch faint pencil and the shadows fill in, drop it to keep the shadows and the pencil disappears. Automatic adaptive thresholding (and this app's own Flatten slider) fights uneven lighting, but it cannot be told _which_ parts of a drawing matter. This can.
+
 **Live: <https://meigo.github.io/slop-vectorizer/>**
 
 Everything runs in your browser. Images are never uploaded anywhere — the whole pipeline executes locally in a Web Worker. The last session (source image and settings) is kept in this browser's local storage so it can be continued, and clearing site data removes it.
@@ -21,8 +23,8 @@ Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 3
 
 ## Features
 
+- **Local levels** — any number of movable, soft-edged circles, each with its own black/white point, so one drawing can be read several ways at once. Stacked in painter order, so overlaps blend instead of seaming; add, select, hide or delete them from the list; drawn only over the input, never over the output, so the result stays clear
 - Two synced compare views: side-by-side and overlay-split with a draggable divider, deep zoom, pinch on touch
-- **Local levels** — any number of movable, soft-edged circles, each with its own black/white point, stacked in painter order so overlaps blend instead of seaming; add, select, hide or delete them from the list. Drawn only over the input, never over the output, so the result stays clear
 - Editable palette: click a swatch to recolor the output; overrides survive scale and pre-effect changes
 - **Unmodified** toggle to see the input before every adjustment, without touching the settings
 - Decode-time rescaling ×⅓–×3 (down for smoother shapes, up to save thin strokes; gap-closing range scales with it)
