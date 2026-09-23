@@ -2,7 +2,7 @@
 
 Client-side image vectorizer with sub-pixel edge recovery, inspired by [Vector Magic](https://vectormagic.com/)'s inverse-rendering approach. Drop a logo, sketch, or flat-art image — get a clean SVG whose curves land where the artwork's edges actually are, not on the pixel grid.
 
-**Adjust the levels where the drawing needs it.** Drop soft-edged circles on a face, a hand, a dark corner of the paper — each with its own black and white point — and the trace re-runs live. Tracers normally give you one global threshold that has to serve the whole page: lift it to catch faint pencil and the shadows fill in, drop it to keep the shadows and the pencil disappears. Automatic adaptive thresholding (and this app's own Flatten slider) fights uneven lighting, but it cannot be told _which_ parts of a drawing matter. This can.
+**Adjust the levels where the drawing needs it.** Drop soft-edged circles on a face, a hand, a dark corner of the paper — each with its own black and white point — and the trace re-runs live.
 
 **Live: <https://meigo.github.io/slop-vectorizer/>**
 
