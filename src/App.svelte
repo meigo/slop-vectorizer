@@ -514,16 +514,10 @@
           onselect={(i) => (selected = i)}
           oncircle={updateCircle}
         />
-        <ImagePane
-          svg={result ? sizedSvg : null}
-          label="SVG"
-          {viewport}
-          circles={options.localCircles}
-          {selected}
-          size={displayImage}
-          onselect={(i) => (selected = i)}
-          oncircle={updateCircle}
-        />
+        <!-- No circles on the OUTPUT pane: the rings are only useful where you can act on
+             them, and the point of this pane is to judge the result unobstructed. Editing
+             happens on the input pane (and, in split view, on its half). -->
+        <ImagePane svg={result ? sizedSvg : null} label="SVG" {viewport} />
       {/if}
       {#if stage}<span class="stage-pill">Vectorizing… ({stage})</span>{/if}
     </div>

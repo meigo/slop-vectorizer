@@ -194,16 +194,21 @@
     </div>
   </div>
   {#if size}
-    <!-- Paint order must stay the data (list) order: hitTestList scans top-down over this
-         same `circles` order to decide which overlay is "on top" for a dot/interior click,
-         so reordering the paint here without teaching hitTestList the new order makes the
-         visual stack and the hit test disagree (see the fix-7 revert in the fix wave). -->
-    {#each circles as c, i (i)}
-      <LocalGizmo
-        c={toScreen(c, size.width, size.height, viewport)}
-        state={c.hidden ? 'hidden' : i === selected ? 'selected' : 'unselected'}
-      />
-    {/each}
+    <!-- Clipped to the IMAGE half, exactly like the layer above it: the rings would otherwise
+         sit over the SVG half, which exists to be judged clean. Dragging still works there —
+         the hit test reads the pointer, not the paint. -->
+    <div class="clip gizmos" style:clip-path={`inset(0 ${100 - divider}% 0 0)`}>
+      <!-- Paint order must stay the data (list) order: hitTestList scans top-down over this
+           same `circles` order to decide which overlay is "on top" for a dot/interior click,
+           so reordering the paint here without teaching hitTestList the new order makes the
+           visual stack and the hit test disagree (see the fix-7 revert in the fix wave). -->
+      {#each circles as c, i (i)}
+        <LocalGizmo
+          c={toScreen(c, size.width, size.height, viewport)}
+          state={c.hidden ? 'hidden' : i === selected ? 'selected' : 'unselected'}
+        />
+      {/each}
+    </div>
   {/if}
   <div
     class="divider"
@@ -243,6 +248,9 @@
   .clip {
     position: absolute;
     inset: 0;
+  }
+  .gizmos {
+    pointer-events: none;
   }
   .layer {
     position: absolute;
