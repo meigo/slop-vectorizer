@@ -6,26 +6,29 @@ Client-side image vectorizer with sub-pixel edge recovery, inspired by [Vector M
 
 Everything runs in your browser. Images are never uploaded anywhere — the whole pipeline executes locally in a Web Worker. The last session (source image and settings) is kept in this browser's local storage so it can be continued, and clearing site data removes it.
 
-![slop-vectorizer UI: an ink sketch on the left, its vectorized SVG with transparent background on the right, controls panel with palette swatches, pre-effects and output options](docs/ui-screenshot.webp)
+![slop-vectorizer UI: a pencil drawing on the left with a local-levels circle over the face, its recoloured SVG on the right, and the controls panel showing the File menu, palette swatches, input adjustments, the circle list and output options](docs/ui-screenshot.webp)
 
 ## How it works
 
 Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 30% blended between two region colors tells you where the true edge crosses it. The pipeline exploits this:
 
-1. **Pre-effects** — optional levels / blur / saturation cleanup, applied before analysis
+1. **Pre-effects** — optional levels, illumination flattening, blur and saturation cleanup, applied before analysis; **local levels** circles then blend their own black/white points over chosen areas, so a face and a body can be read differently in one pass
 2. **Palette estimation** — k-means over flat interior pixels, always from the original-scale image (scale-invariant), with auto color count or manual 2–16
 3. **Segmentation** — per-pixel classification, despeckling, and guarded morphological **gap closing** that reconnects dashed thin strokes over textured paper
 4. **Sub-pixel boundary tracing** — region boundaries refined against the original anti-aliasing (`t = fa + fb − 0.5`, exact for any edge slope; ~0.04 px measured error)
 5. **Corner detection + piecewise cubic Bézier fitting** (Schneider), G1-continuous at smooth joints
-6. **SVG assembly** — optional same-color path merging, transparent background, and compact serialization
+6. **SVG assembly** — optional same-color path merging, stacked solid shapes, transparent background, and compact serialization
 
 ## Features
 
-- Two synced compare views: side-by-side and overlay-split with draggable divider, deep zoom
+- Two synced compare views: side-by-side and overlay-split with a draggable divider, deep zoom, pinch on touch
+- **Local levels** — any number of movable, soft-edged circles, each with its own black/white point, stacked in painter order so overlaps blend instead of seaming; add, select, hide or delete them from the list. Drawn only over the input, never over the output, so the result stays clear
 - Editable palette: click a swatch to recolor the output; overrides survive scale and pre-effect changes
-- Local levels: several movable, soft-edged circles, each with its own black/white point
+- **Unmodified** toggle to see the input before every adjustment, without touching the settings
 - Decode-time rescaling ×⅓–×3 (down for smoother shapes, up to save thin strokes; gap-closing range scales with it)
-- Keyboard-accessible controls; Save rewrites the same file (Chromium) or goes to Save to Files (iPad)
+- **Project files** — `name.vectorizer.zip` keeps the original image and every setting (circles included); drop one on the start screen to carry on. Old projects keep opening as the format grows
+- **Autosave** — the last session is offered as a Continue card on the start screen; New image never discards it
+- **File menu** with ⌘S save, ⇧⌘S save as, ⌘O open; Save writes over the same file on Chromium, goes through Save to Files on iPad, and downloads elsewhere
 - Deterministic: same input + settings → byte-identical SVG
 
 ## Development
