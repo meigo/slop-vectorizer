@@ -7,7 +7,7 @@
   import ShareReadyDialog from './lib/ShareReadyDialog.svelte'
   import { Viewport } from './lib/viewport.svelte'
   import { VectorizerClient } from './lib/workerClient'
-  import { fileToRasterImage, maxGapClosing } from './lib/decode'
+  import { fileToRasterImage, maxGapClosing, type DecodeResult } from './lib/decode'
   import { initialLocal } from './lib/localGizmo'
   import {
     DEFAULT_OPTIONS,
@@ -384,13 +384,16 @@
     lastPalette = pal
   })
 
-  async function decodeAndRun(file: Blob) {
+  const UNDECODABLE = 'Could not decode that file — try a PNG, JPEG, GIF, or WebP.'
+
+  /** `decoded` skips the decode when the caller already has it at the current scale. */
+  async function decodeAndRun(file: Blob, decoded?: DecodeResult) {
     error = null
     notice = null
     result = null
     stage = null
     try {
-      const { image: img, clamped } = await fileToRasterImage(file, scale)
+      const { image: img, clamped } = decoded ?? (await fileToRasterImage(file, scale))
       if (clamped) notice = 'Large image was downscaled to 4096px'
       image = img
       if (scale === 1) baseImage = img // ×1 decode = the palette source
@@ -405,8 +408,7 @@
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       if (msg === 'cancelled') return // superseded by a newer call; let that call own the UI state
-      error =
-        msg === 'undecodable' ? 'Could not decode that file — try a PNG, JPEG, GIF, or WebP.' : msg
+      error = msg === 'undecodable' ? UNDECODABLE : msg
       stage = null
     }
   }
@@ -414,15 +416,72 @@
   const isProjectFile = (f: File) =>
     f.name.toLowerCase().endsWith('.zip') || f.type === 'application/zip'
 
-  function handleFile(file: File) {
+  async function handleFile(file: File) {
     if (isProjectFile(file)) {
       void openProject(file)
       return
     }
+    // Decode before touching the session: over the editor, an undecodable file must leave the
+    // current work exactly as it was. A new image always starts at ×1, so this decode is the one
+    // decodeAndRun would make.
+    const prevSource = sourceFile
+    let decoded: DecodeResult
+    try {
+      decoded = await fileToRasterImage(file, 1)
+    } catch {
+      error = UNDECODABLE
+      return
+    }
+    if (sourceFile !== prevSource) return // a newer file arrived while this one decoded
+    // A new image starts fresh at ×1 with no circles (settings carry over, as before).
+    clearTimeout(debounce) // a slider rerun queued for the old image
     sourceFile = file
     forgetSave()
     forgetProjectSave()
-    void decodeAndRun(file)
+    scale = 1
+    lastScale = 1
+    preserveNextFraming = false
+    baseImage = null
+    fittedW = 0
+    fittedH = 0
+    selected = -1
+    options.localCircles = []
+    void decodeAndRun(file, decoded)
+  }
+
+  // New image picks a file first and only then replaces the session, so cancelling the picker
+  // loses nothing. The start screen's Dropzone has its own input; this one serves the editor.
+  let imageInput: HTMLInputElement
+  function imagePicked() {
+    const f = imageInput.files?.[0]
+    if (f) handleFile(f)
+    imageInput.value = ''
+  }
+
+  // Drop and paste work over the editor too (the Dropzone owns them on the start screen). The
+  // window must accept every file drag, or a missed drop navigates the tab away from the work.
+  let dropping = $state(false)
+  const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files')
+  function editorDragOver(e: DragEvent) {
+    if (!image || !hasFiles(e)) return
+    e.preventDefault()
+    dropping = true
+  }
+  function editorDragLeave(e: DragEvent) {
+    if (!e.relatedTarget) dropping = false // left the window, not just crossed a child
+  }
+  function editorDrop(e: DragEvent) {
+    if (!image || !hasFiles(e)) return
+    e.preventDefault()
+    dropping = false
+    const f = e.dataTransfer?.files?.[0]
+    if (f) handleFile(f)
+  }
+  function editorPaste(e: ClipboardEvent) {
+    if (!image || isTypingTarget(e.target)) return
+    const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith('image/'))
+    const f = item?.getAsFile()
+    if (f) handleFile(f)
   }
 
   function handleScale() {
@@ -468,7 +527,14 @@
   }
 </script>
 
-<svelte:window onkeydown={shortcut} />
+<svelte:window
+  onkeydown={shortcut}
+  ondragover={editorDragOver}
+  ondragleave={editorDragLeave}
+  ondrop={editorDrop}
+  onpaste={editorPaste}
+/>
+<input type="file" accept="image/*" hidden bind:this={imageInput} onchange={imagePicked} />
 <input
   type="file"
   accept=".zip,application/zip"
@@ -550,27 +616,11 @@
         onchange={rerun}
         onscale={handleScale}
         onfit={fit}
-        onnew={() => {
-          client.cancel()
-          sourceFile = null
-          forgetSave()
-          forgetProjectSave()
-          scale = 1
-          lastScale = 1
-          preserveNextFraming = false
-          baseImage = null
-          image = null
-          result = null
-          error = null
-          stage = null
-          fittedW = 0
-          fittedH = 0
-          selected = -1
-          options.localCircles = []
-        }}
+        onnew={() => imageInput.click()}
       />
     </aside>
   </div>
+  {#if dropping}<div class="drop-overlay"><span>Drop to open</span></div>{/if}
   {#if error}
     <div class="toast" role="alert">
       {error}
@@ -645,6 +695,24 @@
     color: var(--color-muted);
     line-height: 1.55;
     margin: 0 0 1.5rem;
+  }
+  .drop-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 20%, transparent);
+    pointer-events: none; /* the drag's target stays the page beneath, so dragleave stays honest */
+  }
+  .drop-overlay span {
+    background: var(--color-panel);
+    border: 1px solid var(--color-line);
+    color: var(--color-text);
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 999px;
   }
   .toast {
     position: fixed;

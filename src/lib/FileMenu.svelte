@@ -51,7 +51,7 @@
     ></button>
     <div class="menu" role="menu">
       <button class="item" role="menuitem" disabled={!canNew} onclick={() => run(onnew)}
-        >New image</button
+        >New image…</button
       >
       <button class="item" role="menuitem" onclick={() => run(onopen)}>
         Open project… <span class="kbd">{mod}O</span>
