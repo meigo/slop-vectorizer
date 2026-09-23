@@ -553,6 +553,9 @@
       </p>
       {#if resumable}<ContinueCard rec={resumable} onopen={resume} />{/if}
       <Dropzone onfile={handleFile} {error} />
+      <button class="open-project" onclick={openProjectPicker}>
+        Open project… <span class="kbd">{mod}O</span>
+      </button>
     </div>
   </main>
 {:else}
@@ -713,6 +716,12 @@
     font-size: 14px;
     padding: 8px 16px;
     border-radius: 999px;
+  }
+  .open-project {
+    margin-top: 1rem;
+  }
+  .open-project .kbd {
+    color: var(--color-muted);
   }
   .toast {
     position: fixed;
