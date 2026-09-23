@@ -1,7 +1,15 @@
 <!-- src/lib/LocalGizmo.svelte -->
 <!-- Draws the local-levels circle in pane (screen) coordinates, outside the zoom transform, so
-     strokes and the dot keep their size at any zoom. Pointer handling lives in the panes. White
-     over a dark halo rather than theme tokens: it sits on ARTWORK, which may be light or dark. -->
+     strokes and the dot keep their size at any zoom. Pointer handling lives in the panes.
+
+     ACCENT over a dark halo, not white: a white ring disappears into dense black-and-white line
+     art, which is most of what this app traces. The artwork is effectively greyscale, so a
+     saturated hue reads against paper, ink and everything between — and blue already means "this
+     is the selected thing" everywhere else in the app. A blend mode was considered and rejected:
+     `difference` turns white into the SAME mid-grey it sits on, so it fails on exactly the
+     mid-tones (pencil, the SVG pane's checkerboard) where visibility is already hardest.
+     Hidden circles stay muted grey — they are not part of the output, so they must not read as
+     active. -->
 <script lang="ts">
   import { DOT_R, type GizmoState, type ScreenCircle } from './localGizmo'
 
@@ -24,7 +32,7 @@
         cx={c.x}
         cy={c.y}
         r={c.inner}
-        class={['ring', 'quiet', state === 'hidden' && 'dashed']}
+        class={['ring', 'quiet', state === 'hidden' && 'dashed hidden-ring']}
       />
     </g>
   {/if}
@@ -43,19 +51,25 @@
     stroke-width: 3;
   }
   .ring {
-    stroke: #fff;
-    stroke-width: 1.5;
+    stroke: var(--color-accent);
+    stroke-width: 1.75;
   }
   .dashed {
     stroke-dasharray: 6 4;
   }
   .dot {
-    fill: #fff;
+    fill: var(--color-accent);
     stroke: rgb(0 0 0 / 0.55);
     stroke-width: 1.5;
   }
   .quiet {
-    stroke-width: 1;
-    opacity: 0.7;
+    stroke-width: 1.25;
+    opacity: 0.8;
+  }
+  /* Hidden: grey rather than accent, so "in the list but not in the output" is visible at a
+     glance without reading the eye icon. */
+  .hidden-ring {
+    stroke: var(--color-muted);
+    opacity: 0.65;
   }
 </style>
