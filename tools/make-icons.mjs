@@ -11,8 +11,8 @@ import { writeFileSync, readFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
-const BG = [0xff, 0xff, 0xff] // white plate — the mark is black, and a white square reads on any tab bar
-const INK = [0x00, 0x00, 0x00]
+const BG = [0x1e, 0x1e, 0x22] // the dark tile slop-vector-editor's apple-touch-icon uses, so the apps match
+const INK = [0x66, 0x7f, 0xff] // the logo's #667fff, as in favicon.svg
 /** Supersampling factor per axis. 4 → 16 coverage samples per output pixel. */
 const SS = 4
 
@@ -164,7 +164,7 @@ function bounds(polys) {
 }
 
 /**
- * Rasterize the polygons into a size×size RGBA icon: black ink on a full-bleed white plate.
+ * Rasterize the polygons into a size×size RGBA icon: blue ink on a full-bleed dark plate.
  * `fill` (0..1) is the fraction of the square the MARK occupies — the plate is always full-bleed,
  * so a smaller value only insets the art (0.55 keeps it inside Android's maskable safe zone).
  *
