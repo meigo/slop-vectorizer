@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const BG = [0x1e, 0x1e, 0x22] // the dark tile slop-vector-editor's apple-touch-icon uses, so the apps match
-const INK = [0x66, 0x7f, 0xff] // the logo's #667fff, as in favicon.svg
+const INK = [0xff, 0x66, 0xd9] // this app's #ff66d9, as in favicon.svg
 /** Supersampling factor per axis. 4 → 16 coverage samples per output pixel. */
 const SS = 4
 
@@ -164,7 +164,7 @@ function bounds(polys) {
 }
 
 /**
- * Rasterize the polygons into a size×size RGBA icon: blue ink on a full-bleed dark plate.
+ * Rasterize the polygons into a size×size RGBA icon: magenta ink on a full-bleed dark plate.
  * `fill` (0..1) is the fraction of the square the MARK occupies — the plate is always full-bleed,
  * so a smaller value only insets the art (0.55 keeps it inside Android's maskable safe zone).
  *
