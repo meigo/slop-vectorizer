@@ -18,6 +18,7 @@
   } from './types'
   import { remapOverrides } from './lib/paletteRemap'
   import { saveToFilesAvailable } from './lib/share'
+  import { readClipboardImage } from './lib/clipboard'
   import { commandFor, isTypingTarget } from './lib/shortcuts'
   import {
     deliverFile,
@@ -452,6 +453,12 @@
   // New image picks a file first and only then replaces the session, so cancelling the picker
   // loses nothing. The start screen's Dropzone has its own input; this one serves the editor.
   let imageInput: HTMLInputElement
+  // Paste image by tap: the paste event needs a keyboard, which an iPad may not have.
+  async function pasteImage() {
+    const r = await readClipboardImage()
+    if (r.kind === 'image') handleFile(r.file)
+    else error = r.message
+  }
   function imagePicked() {
     const f = imageInput.files?.[0]
     if (f) handleFile(f)
@@ -553,9 +560,12 @@
       </p>
       {#if resumable}<ContinueCard rec={resumable} onopen={resume} />{/if}
       <Dropzone onfile={handleFile} {error} />
-      <button class="open-project" onclick={openProjectPicker}>
-        Open project… <span class="kbd">{mod}O</span>
-      </button>
+      <div class="start-buttons">
+        <button onclick={pasteImage}>Paste image</button>
+        <button onclick={openProjectPicker}>
+          Open project… <span class="kbd">{mod}O</span>
+        </button>
+      </div>
     </div>
   </main>
 {:else}
@@ -620,6 +630,7 @@
         onscale={handleScale}
         onfit={fit}
         onnew={() => imageInput.click()}
+        onpaste={pasteImage}
       />
     </aside>
   </div>
@@ -717,10 +728,13 @@
     padding: 8px 16px;
     border-radius: 999px;
   }
-  .open-project {
+  .start-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
     margin-top: 1rem;
   }
-  .open-project .kbd {
+  .start-buttons .kbd {
     color: var(--color-muted);
   }
   .toast {

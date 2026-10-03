@@ -48,6 +48,7 @@
     onopen,
     onsave,
     onsaveproject,
+    onpaste,
     onadd,
     ondelete,
     onselect,
@@ -82,6 +83,7 @@
     onopen: () => void
     onsave: (asNew: boolean) => void
     onsaveproject: (asNew: boolean) => void
+    onpaste: () => void
     onadd: () => void
     ondelete: () => void
     onselect: (i: number) => void
@@ -173,6 +175,7 @@
       {canSaveAs}
       {mod}
       {onnew}
+      {onpaste}
       {onopen}
       {onsaveproject}
     />

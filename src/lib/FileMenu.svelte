@@ -12,6 +12,7 @@
     canSaveAs,
     mod,
     onnew,
+    onpaste,
     onopen,
     onsaveproject,
   }: {
@@ -24,6 +25,8 @@
     /** '⌘' or 'Ctrl+', for the shortcut hints. */
     mod: string
     onnew: () => void
+    /** Never dimmed: an image copied in another app is invisible until the browser is asked. */
+    onpaste: () => void
     onopen: () => void
     onsaveproject: (asNew: boolean) => void
   } = $props()
@@ -53,6 +56,7 @@
       <button class="item" role="menuitem" disabled={!canNew} onclick={() => run(onnew)}
         >New image…</button
       >
+      <button class="item" role="menuitem" onclick={() => run(onpaste)}>Paste image</button>
       <button class="item" role="menuitem" onclick={() => run(onopen)}>
         Open project… <span class="kbd">{mod}O</span>
       </button>
