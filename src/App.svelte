@@ -145,6 +145,20 @@
     }
   }
 
+  // Copy SVG: text/plain, which slop-vector-editor's paste takes. writeText is called inside the
+  // tap, before any await, so Safari allows it.
+  async function copySvg() {
+    const svg = result?.svg
+    if (!svg) return
+    saveStatus = null
+    try {
+      await navigator.clipboard.writeText(svg)
+      saveStatus = 'Copied the SVG to the clipboard'
+    } catch (e) {
+      error = `Copy failed: ${errorMessage(e)}`
+    }
+  }
+
   let projectHandle: FileSystemFileHandle | null = null
   let projectSavedName = $state<string | null>(null)
 
@@ -625,6 +639,7 @@
         ontogglehidden={toggleHidden}
         oncircle={updateCircle}
         onsave={save}
+        oncopy={copySvg}
         onsaveproject={saveProject}
         onchange={rerun}
         onscale={handleScale}

@@ -47,6 +47,7 @@
     onnew,
     onopen,
     onsave,
+    oncopy,
     onsaveproject,
     onpaste,
     onadd,
@@ -82,6 +83,7 @@
     onnew: () => void
     onopen: () => void
     onsave: (asNew: boolean) => void
+    oncopy: () => void
     onsaveproject: (asNew: boolean) => void
     onpaste: () => void
     onadd: () => void
@@ -402,6 +404,7 @@
       {#if canSaveAs && savedName}
         <button onclick={() => onsave(true)} disabled={!svg}>Save as…</button>
       {/if}
+      <button onclick={oncopy} disabled={!svg}>Copy SVG</button>
     </div>
     {#if savedName}<p class="hint">Saves over {savedName}</p>{/if}
     {#if saveStatus}<p class="hint" role="status">{saveStatus}</p>{/if}
