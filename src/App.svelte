@@ -306,11 +306,16 @@
     try {
       const [zip, thumb] = await Promise.all([packProject(d), makeThumb(img)])
       if (!autosaveGen.isCurrent(gen)) return // superseded by a newer write
-      const rec = { zip, sourceName: d.sourceName, thumb, savedAt: Date.now() }
+      const rec = { zip, sourceName: d.sourceName, name: d.name, thumb, savedAt: Date.now() }
       const ok = await putAutosave(rec)
       // keep the card in sync with the slot — but only once something was actually stored
       if (ok && autosaveGen.isCurrent(gen))
-        resumable = { sourceName: rec.sourceName, thumb: rec.thumb, savedAt: rec.savedAt }
+        resumable = {
+          sourceName: rec.sourceName,
+          name: rec.name,
+          thumb: rec.thumb,
+          savedAt: rec.savedAt,
+        }
     } catch {
       // Autosave is best-effort; a failure must never interrupt the session.
     }
@@ -332,7 +337,12 @@
   $effect(() => {
     void getAutosave().then(
       (rec) =>
-        (resumable = rec && { sourceName: rec.sourceName, thumb: rec.thumb, savedAt: rec.savedAt }),
+        (resumable = rec && {
+          sourceName: rec.sourceName,
+          name: rec.name,
+          thumb: rec.thumb,
+          savedAt: rec.savedAt,
+        }),
     )
   })
 

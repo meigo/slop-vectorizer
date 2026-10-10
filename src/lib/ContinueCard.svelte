@@ -18,7 +18,8 @@
 <button class="card" onclick={onopen}>
   {#if thumbUrl}<img src={thumbUrl} alt="" />{/if}
   <span class="text">
-    <span class="name">Continue {rec.sourceName || 'last session'}</span>
+    <!-- A slot from before project names has only its image's name. -->
+    <span class="name">Continue {rec.name || rec.sourceName || 'last session'}</span>
     <span class="when">{savedAtLabel(rec.savedAt)}</span>
   </span>
 </button>

@@ -10,6 +10,8 @@ const KEY = 'autosave'
 export interface AutosaveRecord {
   zip: Blob
   sourceName: string
+  /** The project name; absent in slots written before projects had names. */
+  name?: string
   thumb: Blob | null
   savedAt: number
 }
@@ -18,6 +20,7 @@ export interface AutosaveRecord {
  *  the whole tab session just to render a start-screen card. */
 export interface AutosaveSummary {
   sourceName: string
+  name?: string
   thumb: Blob | null
   savedAt: number
 }
