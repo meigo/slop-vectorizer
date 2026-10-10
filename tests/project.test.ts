@@ -114,11 +114,22 @@ describe('compatibility', () => {
     expect(back.options).toEqual({ ...DEFAULT_OPTIONS, colorCount: 3 })
   })
 
-  it('names a project saved before names existed after its image', async () => {
-    const back = await unpackProject(
-      zipOf({ app: 'slop-vectorizer', version: 2, sourceName: 'old.png', scale: 1, options: {} }),
-    )
-    expect(back.name).toBe('old')
+  describe('a project saved before names existed', () => {
+    const old = () =>
+      zipOf({ app: 'slop-vectorizer', version: 2, sourceName: 'old.png', scale: 1, options: {} })
+
+    it('takes its file name', async () => {
+      expect((await unpackProject(old(), 'Brand mark.vectorizer.zip')).name).toBe('Brand mark')
+      expect((await unpackProject(old(), 'renamed.ZIP')).name).toBe('renamed')
+    })
+    it('takes its image name when there is no file name (the autosave slot)', async () => {
+      expect((await unpackProject(old())).name).toBe('old')
+      expect((await unpackProject(old(), '.vectorizer.zip')).name).toBe('old')
+    })
+    it('keeps a saved name over the file name', async () => {
+      const back = await unpackProject(await packProject(data()), 'other.vectorizer.zip')
+      expect(back.name).toBe('Company logo')
+    })
   })
 
   it('remembers a circle saved only as the active one', async () => {

@@ -246,11 +246,11 @@
 
   /** Open a .zip project: unpack, prime the palette source at ×1 if the saved scale isn't
    *  ×1, then decode once at the saved scale. */
-  async function openProject(file: File): Promise<boolean> {
+  async function openProject(file: File, fileName = file.name): Promise<boolean> {
     const prevSource = sourceFile
     let d
     try {
-      d = await unpackProject(file)
+      d = await unpackProject(file, fileName)
     } catch (e) {
       error = errorMessage(e)
       return false
@@ -323,7 +323,9 @@
       error = 'Could not load the autosaved session.'
       return
     }
-    const ok = await openProject(new File([rec.zip], 'autosave.zip', { type: 'application/zip' }))
+    // No file name: an autosave from before project names takes its image's name instead.
+    const zipFile = new File([rec.zip], 'autosave.zip', { type: 'application/zip' })
+    const ok = await openProject(zipFile, '')
     if (ok) resumable = null // only once the restore actually succeeded — the start screen unmounts then anyway
   }
 

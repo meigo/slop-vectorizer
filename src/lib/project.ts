@@ -136,7 +136,13 @@ export async function packProject(d: ProjectData): Promise<Blob> {
 // it does inflate (256 MB: comfortably above any real source image or settings blob).
 const MAX_ENTRY_SIZE = 256 * 1024 * 1024
 
-export async function unpackProject(zip: Blob): Promise<ProjectData> {
+/** `logo.vectorizer.zip` → `logo`: the project name an opened project file implies. */
+export const nameFromProjectFile = (fileName: string) =>
+  fileName.replace(/(\.vectorizer)?\.zip$/i, '').trim()
+
+/** `fileName` is the opened file's name ('' for the autosave slot): it names a project saved
+ *  before names existed. */
+export async function unpackProject(zip: Blob, fileName = ''): Promise<ProjectData> {
   let entries: Record<string, Uint8Array>
   try {
     entries = unzipSync(new Uint8Array(await zip.arrayBuffer()), {
@@ -185,8 +191,12 @@ export async function unpackProject(zip: Blob): Promise<ProjectData> {
   return {
     source,
     sourceName,
-    // Projects saved before the name existed were named after their image.
-    name: typeof parsed.name === 'string' ? parsed.name : nameFromFile(sourceName),
+    // Projects saved before the name existed take their file's name; an old autosave, which has
+    // no file name, takes its image's.
+    name:
+      typeof parsed.name === 'string'
+        ? parsed.name
+        : nameFromProjectFile(fileName) || nameFromFile(sourceName),
     scale: typeof parsed.scale === 'number' ? parsed.scale : 1,
     options,
   }
