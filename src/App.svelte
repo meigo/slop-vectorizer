@@ -468,8 +468,8 @@
       return
     }
     // Decode before touching the session: over the editor, an undecodable file must leave the
-    // current work exactly as it was. A new image always starts at ×1, so this decode is the one
-    // decodeAndRun would make.
+    // current work exactly as it was. This ×1 decode is also the palette source, and at ×1 it is
+    // the one decodeAndRun would make.
     const prevSource = sourceFile
     let decoded: DecodeResult
     try {
@@ -479,21 +479,19 @@
       return
     }
     if (sourceFile !== prevSource) return // a newer file arrived while this one decoded
-    // A new image starts fresh at ×1 with no circles (settings carry over, as before).
+    // A new image starts with no circles; the scale and other settings carry over.
     clearTimeout(debounce) // a slider rerun queued for the old image
     sourceFile = file
     projectName = nameFromFile(file.name)
     forgetSave()
     forgetProjectSave()
-    scale = 1
-    lastScale = 1
     preserveNextFraming = false
-    baseImage = null
+    baseImage = scale === 1 ? null : decoded.image
     fittedW = 0
     fittedH = 0
     selected = -1
     options.localCircles = []
-    void decodeAndRun(file, decoded)
+    void decodeAndRun(file, scale === 1 ? decoded : undefined)
   }
 
   // New image picks a file first and only then replaces the session, so cancelling the picker
