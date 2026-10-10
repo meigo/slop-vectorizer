@@ -87,6 +87,11 @@
   let sourceFile = $state<File | null>(null)
   /** Names the saved project and SVG files. '' = untitled (a pasted image). */
   let projectName = $state('')
+  // The tab shows the open project's name; the start screen keeps index.html's title.
+  const homeTitle = document.title
+  $effect(() => {
+    document.title = sourceFile ? `${projectName || 'vectorized'} — slop-vectorizer` : homeTitle
+  })
   let scale = $state(1)
   let image = $state<RasterImage | null>(null)
   let result = $state<ClientResult | null>(null)
