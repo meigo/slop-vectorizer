@@ -27,7 +27,7 @@
     writeProjectFile,
     writeSvgFile,
   } from './lib/saveFile'
-  import { packProject, projectFileName, unpackProject } from './lib/project'
+  import { nameFromFile, packProject, projectFileName, unpackProject } from './lib/project'
   import {
     getAutosave,
     makeThumb,
@@ -85,6 +85,8 @@
   let fittedW = 0,
     fittedH = 0
   let sourceFile = $state<File | null>(null)
+  /** Names the saved project and SVG files. '' = untitled (a pasted image). */
+  let projectName = $state('')
   let scale = $state(1)
   let image = $state<RasterImage | null>(null)
   let result = $state<ClientResult | null>(null)
@@ -122,7 +124,7 @@
     const svg = result?.svg
     if (!svg) return
     const source = sourceFile
-    const name = svgFileName(source?.name)
+    const name = svgFileName(projectName)
     saveStatus = null
     try {
       if (saveToFiles) {
@@ -167,12 +169,23 @@
     projectSavedName = null
   }
 
+  // A rename forgets the saved files, so the next save writes under the new name rather than
+  // overwriting the file named after the old one.
+  function rename(name: string) {
+    if (name === projectName) return
+    projectName = name
+    forgetSave()
+    forgetProjectSave()
+    if (result) scheduleAutosave()
+  }
+
   /** Everything needed to carry on working: the ORIGINAL file plus the settings. */
   function projectData() {
     if (!sourceFile) return null
     return {
       source: sourceFile,
       sourceName: sourceFile.name,
+      name: projectName,
       scale,
       options: $state.snapshot(options),
     }
@@ -208,7 +221,7 @@
   async function saveProject(asNew: boolean) {
     const d = projectData()
     if (!d) return
-    const name = projectFileName(d.sourceName)
+    const name = projectFileName(d.name)
     saveStatus = null
     try {
       const zip = await packProject(d)
@@ -247,6 +260,7 @@
     if (sourceFile !== prevSource) return false
     const src = new File([d.source], d.sourceName || 'image', { type: d.source.type })
     sourceFile = src
+    projectName = d.name
     forgetSave()
     forgetProjectSave()
     options = d.options
@@ -451,6 +465,7 @@
     // A new image starts fresh at ×1 with no circles (settings carry over, as before).
     clearTimeout(debounce) // a slider rerun queued for the old image
     sourceFile = file
+    projectName = nameFromFile(file.name)
     forgetSave()
     forgetProjectSave()
     scale = 1
@@ -629,6 +644,8 @@
         {canSaveAs}
         {saveStatus}
         {projectSavedName}
+        {projectName}
+        onrename={rename}
         {mod}
         onopen={openProjectPicker}
         circles={options.localCircles}

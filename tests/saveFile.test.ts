@@ -3,15 +3,16 @@ import { deliverFile, svgFileName, writeProjectFile, type DeliverDeps } from '..
 import type { ShareOutcome } from '../src/lib/share'
 
 describe('svgFileName', () => {
-  it('swaps the last extension for .svg', () => {
-    expect(svgFileName('logo.png')).toBe('logo.svg')
-    expect(svgFileName('photo.final.jpeg')).toBe('photo.final.svg')
-    expect(svgFileName('scan')).toBe('scan.svg')
+  it('adds .svg to the project name, keeping any dots in it', () => {
+    expect(svgFileName('logo')).toBe('logo.svg')
+    expect(svgFileName('photo.final')).toBe('photo.final.svg')
+  })
+  it('drops characters no file system accepts', () => {
+    expect(svgFileName(' a/b:c? ')).toBe('abc.svg')
   })
   it('falls back to vectorized.svg with no usable name', () => {
-    expect(svgFileName(undefined)).toBe('vectorized.svg')
     expect(svgFileName('')).toBe('vectorized.svg')
-    expect(svgFileName('.png')).toBe('vectorized.svg')
+    expect(svgFileName('  /  ')).toBe('vectorized.svg')
   })
 })
 

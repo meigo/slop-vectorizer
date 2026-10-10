@@ -12,6 +12,8 @@ export interface ProjectData {
   /** The original file's bytes, never re-encoded. */
   source: Blob
   sourceName: string
+  /** The project name: the stem of the saved project and SVG file names. '' = untitled. */
+  name: string
   scale: number
   options: PipelineOptions
 }
@@ -90,9 +92,20 @@ function readCircles(
   return remembered ? [remembered] : []
 }
 
-/** `logo.png` → `logo.vectorizer.zip`; distinct from the `logo.svg` the same session exports. */
-export function projectFileName(sourceName: string | undefined): string {
-  return (baseName(sourceName) || 'vectorized') + '.vectorizer.zip'
+/** The project name an image file implies: its name without the extension. */
+export const nameFromFile = (fileName: string) => baseName(fileName)
+
+/** A project name made safe as a file name (as slop-paint and slop-animator): characters no file
+ *  system accepts are dropped, and an empty result falls back to `vectorized`. */
+export function sanitizeFilename(name: string): string {
+  // eslint-disable-next-line no-control-regex -- stripping control characters is the point
+  const cleaned = name.replace(/[/\\:*?"<>|\u0000-\u001f]/g, '').trim()
+  return cleaned || 'vectorized'
+}
+
+/** `logo` → `logo.vectorizer.zip`; distinct from the `logo.svg` the same session exports. */
+export function projectFileName(name: string): string {
+  return sanitizeFilename(name) + '.vectorizer.zip'
 }
 
 function sourceExt(d: ProjectData): string {
@@ -105,6 +118,7 @@ export async function packProject(d: ProjectData): Promise<Blob> {
     app: 'slop-vectorizer',
     version: PROJECT_VERSION,
     sourceName: d.sourceName,
+    name: d.name,
     scale: d.scale,
     options: d.options,
   }
@@ -167,9 +181,12 @@ export async function unpackProject(zip: Blob): Promise<ProjectData> {
     colorOverrides: sanitizeColorOverrides((saved as { colorOverrides?: unknown }).colorOverrides),
     localCircles: readCircles(parsed, saved),
   }
+  const sourceName = typeof parsed.sourceName === 'string' ? parsed.sourceName : ''
   return {
     source,
-    sourceName: typeof parsed.sourceName === 'string' ? parsed.sourceName : '',
+    sourceName,
+    // Projects saved before the name existed were named after their image.
+    name: typeof parsed.name === 'string' ? parsed.name : nameFromFile(sourceName),
     scale: typeof parsed.scale === 'number' ? parsed.scale : 1,
     options,
   }

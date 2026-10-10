@@ -9,6 +9,8 @@
     canNew,
     canSaveProject,
     projectSavedName,
+    projectName,
+    onrename,
     canSaveAs,
     mod,
     onnew,
@@ -20,6 +22,9 @@
     canSaveProject: boolean
     /** The project file Save project overwrites; null = it will ask where. */
     projectSavedName: string | null
+    /** Names the saved project and SVG files; '' = untitled. */
+    projectName: string
+    onrename: (name: string) => void
     /** Whether a separate "Save as…" means anything: only with a save picker, i.e. not iPad. */
     canSaveAs: boolean
     /** '⌘' or 'Ctrl+', for the shortcut hints. */
@@ -53,6 +58,16 @@
     <button class="backdrop" aria-label="Close menu" tabindex="-1" onclick={() => (open = false)}
     ></button>
     <div class="menu" role="menu">
+      <label class="name" title="Project name — used for the saved project and SVG file names">
+        Name
+        <input
+          type="text"
+          value={projectName}
+          placeholder="vectorized"
+          onchange={(e) => onrename(e.currentTarget.value.trim())}
+        />
+      </label>
+      <div class="sep"></div>
       <button class="item" role="menuitem" disabled={!canNew} onclick={() => run(onnew)}
         >New image…</button
       >
@@ -130,6 +145,30 @@
   }
   .item:hover:not(:disabled) {
     background: var(--color-raised);
+  }
+  .name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+  }
+  .name input {
+    flex: 1;
+    min-width: 0;
+    height: var(--ctl-h);
+    padding: 0 6px;
+    border: 1px solid var(--color-line);
+    border-radius: 6px;
+    background: var(--color-raised);
+    color: var(--color-text);
+    font-family: inherit;
+    font-size: 12px;
+  }
+  /* Under 16px, iOS Safari zooms the page in on focus. */
+  @media (any-pointer: coarse) {
+    .name input {
+      font-size: 16px;
+    }
   }
   .kbd {
     color: var(--color-muted);

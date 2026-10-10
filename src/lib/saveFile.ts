@@ -3,6 +3,7 @@
  *  - Chromium desktop: the File System Access API. The handle is kept, so the next Save
  *    overwrites the same file instead of piling up renumbered copies in Downloads.
  *  - Everything else (Firefox): a plain download. */
+import { sanitizeFilename } from './project'
 import { canShareFile, shareFile, type ShareOutcome } from './share'
 
 type PickerType = { description: string; accept: Record<string, string[]> }
@@ -29,10 +30,9 @@ export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
-/** `photo.final.png` → `photo.final.svg`; a nameless blob (pasted image) → `vectorized.svg`. */
-export function svgFileName(sourceName: string | undefined): string {
-  const base = (sourceName ?? '').replace(/\.[^./\\]*$/, '').trim()
-  return (base || 'vectorized') + '.svg'
+/** Project name `logo` → `logo.svg`; an untitled project (pasted image) → `vectorized.svg`. */
+export function svgFileName(name: string): string {
+  return sanitizeFilename(name) + '.svg'
 }
 
 export function downloadBlob(blob: Blob, name: string): void {

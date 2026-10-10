@@ -28,7 +28,7 @@ Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 3
 - Editable palette: click a swatch to recolor the output; overrides survive scale and pre-effect changes
 - **Unmodified** toggle to see the input before every adjustment, without touching the settings
 - Decode-time rescaling ×⅓–×3 (down for smoother shapes, up to save thin strokes; gap-closing range scales with it)
-- **Project files** — `name.vectorizer.zip` keeps the original image and every setting (circles included); drop one on the start screen to carry on. Old projects keep opening as the format grows
+- **Project files** — `name.vectorizer.zip` (the name is set in File ▸ Name, and also names the exported `name.svg`) keeps the original image and every setting (circles included); drop one on the start screen to carry on. Old projects keep opening as the format grows
 - **Autosave** — the last session is offered as a Continue card on the start screen; New image never discards it
 - **File menu** with ⌘S save, ⇧⌘S save as, ⌘O open; Save writes over the same file on Chromium, goes through Save to Files on iPad, and downloads elsewhere
 - Deterministic: same input + settings → byte-identical SVG
@@ -38,7 +38,7 @@ Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 3
 ```bash
 npm install
 npm run dev            # local dev server
-npm run test           # vitest (222 tests, pipeline ground-truth based)
+npm run test           # vitest (225 tests, pipeline ground-truth based)
 npm run check          # svelte-check + typescript (incl. tests)
 npm run lint           # eslint
 npm run format         # prettier

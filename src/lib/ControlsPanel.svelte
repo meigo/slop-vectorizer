@@ -38,6 +38,8 @@
     canSaveAs,
     saveStatus,
     projectSavedName,
+    projectName,
+    onrename,
     mod,
     circles,
     selected,
@@ -73,6 +75,8 @@
     saveStatus: string | null
     /** The file Save project overwrites, after a first save; null = it asks where. */
     projectSavedName: string | null
+    projectName: string
+    onrename: (name: string) => void
     /** '⌘' or 'Ctrl+', for the menu's shortcut hints. */
     mod: string
     circles: LocalCircle[]
@@ -174,6 +178,8 @@
       canNew={!!svg}
       canSaveProject={!!svg}
       {projectSavedName}
+      {projectName}
+      {onrename}
       {canSaveAs}
       {mod}
       {onnew}

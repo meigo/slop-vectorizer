@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { packProject, projectFileName, unpackProject, type ProjectData } from '../src/lib/project'
+import {
+  nameFromFile,
+  packProject,
+  projectFileName,
+  unpackProject,
+  type ProjectData,
+} from '../src/lib/project'
 import { DEFAULT_OPTIONS } from '../src/types'
 import { unzipSync, zipSync, strToU8, strFromU8 } from 'fflate'
 
@@ -18,6 +24,7 @@ function data(over: Partial<ProjectData> = {}): ProjectData {
   return {
     source: new Blob([bytes], { type: 'image/png' }),
     sourceName: 'logo.png',
+    name: 'Company logo',
     scale: 2,
     options: {
       ...DEFAULT_OPTIONS,
@@ -30,14 +37,22 @@ function data(over: Partial<ProjectData> = {}): ProjectData {
 }
 
 describe('projectFileName', () => {
-  it('replaces the source extension with .vectorizer.zip', () => {
-    expect(projectFileName('logo.png')).toBe('logo.vectorizer.zip')
-    expect(projectFileName('photo.final.jpeg')).toBe('photo.final.vectorizer.zip')
-    expect(projectFileName('scan')).toBe('scan.vectorizer.zip')
+  it('adds .vectorizer.zip to the project name', () => {
+    expect(projectFileName('logo')).toBe('logo.vectorizer.zip')
+    expect(projectFileName('photo.final')).toBe('photo.final.vectorizer.zip')
+    expect(projectFileName('a<b>|c')).toBe('abc.vectorizer.zip')
   })
   it('falls back when there is no usable name', () => {
-    expect(projectFileName(undefined)).toBe('vectorized.vectorizer.zip')
     expect(projectFileName('')).toBe('vectorized.vectorizer.zip')
+    expect(projectFileName('?*')).toBe('vectorized.vectorizer.zip')
+  })
+})
+
+describe('nameFromFile', () => {
+  it('drops the last extension', () => {
+    expect(nameFromFile('photo.final.jpeg')).toBe('photo.final')
+    expect(nameFromFile('scan')).toBe('scan')
+    expect(nameFromFile('')).toBe('')
   })
 })
 
@@ -45,6 +60,7 @@ describe('pack/unpack round trip', () => {
   it('restores the options, scale, circle and source bytes exactly', async () => {
     const back = await unpackProject(await packProject(data()))
     expect(back.sourceName).toBe('logo.png')
+    expect(back.name).toBe('Company logo')
     expect(back.scale).toBe(2)
     expect(back.options).toEqual(data().options)
     expect(back.options.localCircles).toEqual([circle])
@@ -96,6 +112,13 @@ describe('compatibility', () => {
       }),
     )
     expect(back.options).toEqual({ ...DEFAULT_OPTIONS, colorCount: 3 })
+  })
+
+  it('names a project saved before names existed after its image', async () => {
+    const back = await unpackProject(
+      zipOf({ app: 'slop-vectorizer', version: 2, sourceName: 'old.png', scale: 1, options: {} }),
+    )
+    expect(back.name).toBe('old')
   })
 
   it('remembers a circle saved only as the active one', async () => {
