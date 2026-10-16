@@ -50,15 +50,25 @@ export function sameCircleList(a: LocalCircle[], b: LocalCircle[]): boolean {
   })
 }
 
-export function isIdentityPre(o: PreOptions): boolean {
+type GlobalPre = Pick<
+  PreOptions,
+  'blackPoint' | 'whitePoint' | 'blurRadius' | 'saturation' | 'flatten'
+>
+
+/** Whether two option sets agree on every global pre-effect (everything but the circles). The
+ *  one list of those fields: the worker's cache and the identity test both read it. */
+export function sameGlobalPre(a: GlobalPre, b: GlobalPre): boolean {
   return (
-    o.blackPoint === 0 &&
-    o.whitePoint === 255 &&
-    o.blurRadius === 0 &&
-    o.saturation === 1 &&
-    o.flatten === 0 &&
-    effectiveCircles(o).length === 0
+    a.blackPoint === b.blackPoint &&
+    a.whitePoint === b.whitePoint &&
+    a.blurRadius === b.blurRadius &&
+    a.saturation === b.saturation &&
+    a.flatten === b.flatten
   )
+}
+
+export function isIdentityPre(o: PreOptions): boolean {
+  return sameGlobalPre(o, IDENTITY_PRE) && effectiveCircles(o).length === 0
 }
 
 /** The pre-effects without the local circles: what palette estimation sees, so moving a circle

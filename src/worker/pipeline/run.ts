@@ -14,6 +14,7 @@ import {
   globalPre,
   palettePre,
   sameCircleList,
+  sameGlobalPre,
   effectiveCircles,
   type PreOptions,
 } from './preprocess'
@@ -32,14 +33,7 @@ export function firstDirtyStage(
   sameImage: boolean,
 ): StageName {
   if (!prev || !sameImage) return 'pre'
-  if (
-    prev.blackPoint !== next.blackPoint ||
-    prev.whitePoint !== next.whitePoint ||
-    prev.blurRadius !== next.blurRadius ||
-    prev.saturation !== next.saturation ||
-    prev.flatten !== next.flatten ||
-    !sameCircleList(effectiveCircles(prev), effectiveCircles(next))
-  )
+  if (!sameGlobalPre(prev, next) || !sameCircleList(effectiveCircles(prev), effectiveCircles(next)))
     return 'pre'
   if (prev.colorCount !== next.colorCount) return 'palette'
   if (prev.despeckleSize !== next.despeckleSize || prev.gapClosing !== next.gapClosing)
@@ -118,13 +112,7 @@ export function runPipeline(
   // The ×1 source's blur, converted from working-image pixels: it changes with the scale too.
   const srcOpts = palBase && palettePre(preOpts, palBase.width, image.width)
   const srcBlurChanged = !!srcOpts && cache.palBlur !== srcOpts.blurRadius
-  const preFieldsChanged =
-    !prev ||
-    prev.blackPoint !== options.blackPoint ||
-    prev.whitePoint !== options.whitePoint ||
-    prev.blurRadius !== options.blurRadius ||
-    prev.saturation !== options.saturation ||
-    prev.flatten !== options.flatten
+  const preFieldsChanged = !prev || !sameGlobalPre(prev, options)
   if (preFieldsChanged || srcBlurChanged) cache.palPre = undefined
   // The palette comes from the scale-invariant source when one is cached, so a
   // working-image change alone (scale re-decode) does NOT re-estimate — swatch

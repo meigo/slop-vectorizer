@@ -11,6 +11,7 @@
   } from '@lucide/svelte'
   import type { LocalCircle, PipelineOptions, PipelineStats } from '../types'
   import { maxGapClosing } from './decode'
+  import { IDENTITY_PRE } from '../worker/pipeline/preprocess'
   import FileMenu from './FileMenu.svelte'
   import { sliderFill } from './sliderFill'
 
@@ -293,11 +294,8 @@
       <button
         class="reset"
         onclick={() => {
-          options.blackPoint = 0
-          options.whitePoint = 255
-          options.blurRadius = 0
-          options.saturation = 1
-          options.flatten = 0
+          const { blackPoint, whitePoint, blurRadius, saturation, flatten } = IDENTITY_PRE
+          Object.assign(options, { blackPoint, whitePoint, blurRadius, saturation, flatten })
           onchange()
         }}>Reset</button
       >
