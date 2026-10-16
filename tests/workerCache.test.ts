@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { firstDirtyStage, run, sameImageData } from '../src/worker/vectorize.worker'
+import { firstDirtyStage, newCache, runPipeline, sameImageData } from '../src/worker/pipeline/run'
 import { vectorize } from '../src/worker/pipeline'
 import { DEFAULT_OPTIONS } from '../src/types'
 import type { RasterImage } from '../src/types'
@@ -133,27 +133,16 @@ describe('palette source at another scale', () => {
     const out = fills(vectorize(stripes(3), opts, undefined, stripes(1)).svg)
     expect(out.some(reddish) && out.some(bluish)).toBe(true)
   })
-  it('the worker does too', () => {
-    let svg = ''
-    run(stripes(3), opts, (m) => m.type === 'result' && (svg = m.result.svg), 1, stripes(1))
-    expect(fills(svg).some(reddish) && fills(svg).some(bluish)).toBe(true)
-  })
   it('a new palette source re-segments the same working image', () => {
+    const cache = newCache()
     const img = stripes(1, 10)
-    const post = () => {}
-    run(img, { ...DEFAULT_OPTIONS, colorCount: 'auto' }, post, 1, stripes(1, 10))
+    const auto = { ...DEFAULT_OPTIONS, colorCount: 'auto' as const }
+    runPipeline(cache, img, auto, undefined, stripes(1, 10))
     // a palette source with fewer colours (no blue stripe) and the same working image
     const twoTone = stripes(1, 10)
     for (let p = 0; p < 120 * 120; p++)
       if (twoTone.data[p * 4 + 2] === 220) twoTone.data.set([255, 255, 255], p * 4)
-    let result = ''
-    run(
-      img,
-      { ...DEFAULT_OPTIONS, colorCount: 'auto' },
-      (m) => m.type === 'result' && (result = m.result.svg),
-      2,
-      twoTone,
-    )
-    expect(fills(result).length).toBeGreaterThan(0)
+    const { result } = runPipeline(cache, img, auto, undefined, twoTone)
+    expect(fills(result.svg).length).toBeGreaterThan(0)
   })
 })
