@@ -11,39 +11,35 @@ export function mulberry32(seed: number): () => number {
   }
 }
 
-/** Sample low-gradient (interior) pixels so anti-aliased blends don't become palette entries. */
+/** Sample low-gradient (interior) pixels so anti-aliased blends don't become palette entries.
+ *  Two passes, counting the flat pixels first and then taking every stride-th: collecting them
+ *  all to keep `maxSamples` cost ~0.7 GB and ~0.7 s on a 4096² image. */
 function samplePixels(img: RasterImage, maxSamples: number): Float64Array {
   const { width: w, height: h, data } = img
-  const idx = (x: number, y: number) => (y * w + x) * 4
-  const flat: number[] = []
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const o = idx(x, y)
-      let g = 0
-      for (const [nx, ny] of [
-        [x + 1, y],
-        [x - 1, y],
-        [x, y + 1],
-        [x, y - 1],
-      ] as const) {
-        const n = idx(nx, ny)
-        g = Math.max(
-          g,
-          Math.abs(data[o] - data[n]),
-          Math.abs(data[o + 1] - data[n + 1]),
-          Math.abs(data[o + 2] - data[n + 2]),
-        )
-      }
-      if (g < 24) flat.push(data[o], data[o + 1], data[o + 2])
-    }
-  }
-  // Fallback: tiny/noisy image where nothing is flat
-  if (flat.length === 0)
-    for (let o = 0; o < data.length; o += 4) flat.push(data[o], data[o + 1], data[o + 2])
-  const n = flat.length / 3
-  const stride = Math.max(1, Math.floor(n / maxSamples))
+  const diff = (o: number, n: number) =>
+    Math.max(
+      Math.abs(data[o] - data[n]),
+      Math.abs(data[o + 1] - data[n + 1]),
+      Math.abs(data[o + 2] - data[n + 2]),
+    )
+  const isFlat = (o: number) =>
+    Math.max(diff(o, o + 4), diff(o, o - 4), diff(o, o + 4 * w), diff(o, o - 4 * w)) < 24
+  let n = 0
+  for (let y = 1; y < h - 1; y++)
+    for (let x = 1, o = (y * w + 1) * 4; x < w - 1; x++, o += 4) if (isFlat(o)) n++
   const out: number[] = []
-  for (let i = 0; i < n; i += stride) out.push(flat[3 * i], flat[3 * i + 1], flat[3 * i + 2])
+  const take = (o: number) => out.push(data[o], data[o + 1], data[o + 2])
+  if (n === 0) {
+    // Fallback: tiny/noisy image where nothing is flat
+    const stride = Math.max(1, Math.floor((w * h) / maxSamples))
+    for (let i = 0; i < w * h; i += stride) take(i * 4)
+  } else {
+    const stride = Math.max(1, Math.floor(n / maxSamples))
+    let i = 0
+    for (let y = 1; y < h - 1; y++)
+      for (let x = 1, o = (y * w + 1) * 4; x < w - 1; x++, o += 4)
+        if (isFlat(o) && i++ % stride === 0) take(o)
+  }
   return new Float64Array(out)
 }
 
