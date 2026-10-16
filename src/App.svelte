@@ -261,6 +261,9 @@
 
   /** Replace the session with `file`. Whatever the old one had queued is dropped with it. */
   function startSession(file: File, name: string, base: RasterImage) {
+    // The worker runs jobs to completion in order: without a restart the new image would wait
+    // behind the old one's job, which nothing will show. Its cache is of no use to a new image.
+    client.cancel()
     clearTimeout(debounce)
     clearTimeout(autosaveTimer) // it would store the new session before its first result
     sourceFile = file
