@@ -130,6 +130,20 @@
     saveStatus = null
   }
 
+  /** iPad / iPhone: send a finished file toward Save to Files and say what happened. Serializing
+   *  is already done, so the sheet can still ride the tap that started the save. */
+  async function shareOut(file: File) {
+    const r = await deliverFile(file)
+    if (r.kind === 'shared') saveStatus = `Sent ${file.name} to the share sheet`
+    else if (r.kind === 'downloaded') saveStatus = `Downloaded ${file.name}`
+    else if (r.kind === 'dismissed') saveStatus = 'Not saved — the share sheet was closed'
+    else shareReady = { file, error: r.error }
+  }
+
+  /** What a desktop save reports: written through a kept handle, or downloaded. */
+  const savedStatus = (r: { name: string; handle: FileSystemFileHandle | null }) =>
+    r.handle ? `Saved ${r.name}` : `Downloaded ${r.name}`
+
   async function save(asNew: boolean) {
     const svg = result?.svg
     if (!svg) return
@@ -137,21 +151,12 @@
     const name = svgFileName(projectName)
     saveStatus = null
     try {
-      if (saveToFiles) {
-        const file = new File([svg], name, { type: 'image/svg+xml' })
-        // Serializing is already done, so the sheet can still ride the tap that started the save.
-        const r = await deliverFile(file)
-        if (r.kind === 'shared') saveStatus = `Sent ${name} to the share sheet`
-        else if (r.kind === 'downloaded') saveStatus = `Downloaded ${name}`
-        else if (r.kind === 'dismissed') saveStatus = 'Not saved — the share sheet was closed'
-        else shareReady = { file, error: r.error }
-        return
-      }
+      if (saveToFiles) return await shareOut(new File([svg], name, { type: 'image/svg+xml' }))
       const r = await writeSvgFile(svg, name, fileHandle, asNew)
       if (!r || sourceFile !== source) return // cancelled, or a new image arrived meanwhile
       fileHandle = r.handle
       savedName = r.handle ? r.name : null
-      saveStatus = r.handle ? `Saved ${r.name}` : `Downloaded ${r.name}`
+      saveStatus = savedStatus(r)
     } catch (e) {
       error = `Save failed: ${errorMessage(e)}`
     }
@@ -234,20 +239,12 @@
     saveStatus = null
     try {
       const zip = await packProject(d)
-      if (saveToFiles) {
-        const file = new File([zip], name, { type: 'application/zip' })
-        const r = await deliverFile(file)
-        if (r.kind === 'shared') saveStatus = `Sent ${name} to the share sheet`
-        else if (r.kind === 'downloaded') saveStatus = `Downloaded ${name}`
-        else if (r.kind === 'dismissed') saveStatus = 'Not saved — the share sheet was closed'
-        else shareReady = { file, error: r.error }
-        return
-      }
-      const r = await writeProjectFile(zip, name, asNew ? null : projectHandle, asNew)
+      if (saveToFiles) return await shareOut(new File([zip], name, { type: 'application/zip' }))
+      const r = await writeProjectFile(zip, name, projectHandle, asNew)
       if (!r || sourceFile !== d.source) return // cancelled, or a new image arrived meanwhile
       projectHandle = r.handle
       projectSavedName = r.handle ? r.name : null
-      saveStatus = r.handle ? `Saved ${r.name}` : `Downloaded ${r.name}`
+      saveStatus = savedStatus(r)
     } catch (e) {
       error = `Save failed: ${errorMessage(e)}`
     }
