@@ -2,16 +2,9 @@
 <script lang="ts">
   import type { LocalCircle, RasterImage } from '../types'
   import type { Viewport } from './viewport.svelte'
-  import { pinchStep, type Point } from './viewportMath'
   import LocalGizmo from './LocalGizmo.svelte'
-  import {
-    applyDrag,
-    cursorFor,
-    hitSlop,
-    hitTestList,
-    toScreen,
-    type GizmoPart,
-  } from './localGizmo'
+  import { toScreen } from './localGizmo'
+  import { drawImage, PaneGestures } from './paneGestures.svelte'
 
   let {
     image = null,
@@ -37,140 +30,24 @@
 
   let el: HTMLDivElement
   let canvas = $state<HTMLCanvasElement | null>(null)
-  // Active touches/pointers by id: one pans, two pinch-zoom.
-  const pointers = new Map<number, Point>()
-  const coarse = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches
-  // A gizmo drag in progress: which pointer, which circle/part it grabbed, and where it started.
-  let gz: { id: number; index: number; part: GizmoPart; start: LocalCircle; from: Point } | null =
-    null
-  let hoverCursor = $state<string | null>(null)
-
-  function panePoint(e: PointerEvent): Point {
-    const r = el.getBoundingClientRect()
-    return { x: e.clientX - r.left, y: e.clientY - r.top }
-  }
-  function moveCap(): number {
-    const r = el.getBoundingClientRect()
-    return Math.min(r.width, r.height) / 2
-  }
+  const g = new PaneGestures(() => ({ el, viewport, circles, selected, size, onselect, oncircle }))
 
   $effect(() => {
-    if (!canvas || !image) return
-    canvas.width = image.width
-    canvas.height = image.height
-    canvas
-      .getContext('2d')!
-      .putImageData(
-        new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
-        0,
-        0,
-      )
+    if (canvas && image) drawImage(canvas, image)
   })
-
-  function wheel(e: WheelEvent) {
-    hoverCursor = null // the circle moves under a still mouse as the view zooms
-    e.preventDefault()
-    const r = el.getBoundingClientRect()
-    viewport.wheelAt(e.clientX - r.left, e.clientY - r.top, e.deltaY)
-  }
-  function down(e: PointerEvent) {
-    // Only the main button: a right-click's pointerup can be swallowed by the context menu,
-    // which left a stale entry that turned plain hover into a pan.
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    // Captured on the pane, not the target: the target is often a path in the SVG, which the
-    // next result replaces, losing the capture and with it this pointer's pointerup.
-    el.setPointerCapture(e.pointerId)
-    const p = panePoint(e)
-    const hit =
-      pointers.size === 1 && size
-        ? hitTestList(
-            circles,
-            selected,
-            size.width,
-            size.height,
-            viewport,
-            p.x,
-            p.y,
-            hitSlop(coarse),
-            moveCap(),
-          )
-        : null
-    if (hit && hit.index !== selected) onselect?.(hit.index)
-    gz = hit
-      ? {
-          id: e.pointerId,
-          index: hit.index,
-          part: hit.part,
-          start: { ...circles[hit.index] },
-          from: p,
-        }
-      : null
-  }
-  function move(e: PointerEvent) {
-    if (gz && gz.id === e.pointerId && size) {
-      oncircle?.(
-        gz.index,
-        applyDrag(gz.start, gz.part, size.width, size.height, viewport, gz.from, panePoint(e)),
-      )
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-      return
-    }
-    if (e.pointerType === 'mouse' && e.buttons === 0) {
-      const p = panePoint(e)
-      const hit = size
-        ? hitTestList(
-            circles,
-            selected,
-            size.width,
-            size.height,
-            viewport,
-            p.x,
-            p.y,
-            hitSlop(coarse),
-            moveCap(),
-          )
-        : null
-      hoverCursor = hit
-        ? cursorFor(
-            hit.part,
-            toScreen(circles[hit.index], size!.width, size!.height, viewport),
-            p.x,
-            p.y,
-          )
-        : null
-    }
-    const prev = pointers.get(e.pointerId)
-    if (!prev) return
-    const cur = { x: e.clientX, y: e.clientY }
-    if (pointers.size === 1) {
-      viewport.panBy(cur.x - prev.x, cur.y - prev.y)
-    } else if (pointers.size === 2) {
-      const other = [...pointers.entries()].find(([id]) => id !== e.pointerId)![1]
-      const s = pinchStep(prev, other, cur, other)
-      const r = el.getBoundingClientRect()
-      viewport.zoomAt(s.cx - r.left, s.cy - r.top, s.factor)
-      viewport.panBy(s.dx, s.dy)
-    }
-    pointers.set(e.pointerId, cur)
-  }
-  function up(e: PointerEvent) {
-    if (gz?.id === e.pointerId) gz = null
-    pointers.delete(e.pointerId)
-  }
 </script>
 
 <div
   class="pane"
   bind:this={el}
-  style:cursor={hoverCursor}
-  onwheel={wheel}
-  onpointerdown={down}
-  onpointermove={move}
-  onpointerup={up}
-  onpointercancel={up}
-  onlostpointercapture={up}
-  onpointerleave={() => (hoverCursor = null)}
+  style:cursor={g.hoverCursor}
+  onwheel={g.wheel}
+  onpointerdown={g.down}
+  onpointermove={g.move}
+  onpointerup={g.up}
+  onpointercancel={g.up}
+  onlostpointercapture={g.up}
+  onpointerleave={g.leave}
   role="img"
   aria-label={label}
 >
