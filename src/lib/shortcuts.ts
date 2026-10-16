@@ -8,15 +8,16 @@ export type Command = 'save' | 'saveAs' | 'open'
 /** The fields this reads from a KeyboardEvent; a test passes a plain object. */
 export interface KeyLike {
   key: string
+  code?: string
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
   altKey?: boolean
 }
 
-/** Typing in a field owns its own keys — ⌘S in a text box is still Save, but the app must not
- *  steal anything from a field that handles it. Color inputs and ranges have no text, so only
- *  real text entry counts. */
+/** Typing in a field owns its own keys (the app's paste must not take a field's paste). Color
+ *  inputs and ranges have no text, so only real text entry counts. The File shortcuts don't ask:
+ *  no field handles ⌘S or ⌘O, so they work from a text box or a focused select too. */
 export function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false
   if (el.isContentEditable) return true
@@ -28,11 +29,16 @@ export function isTypingTarget(el: EventTarget | null): boolean {
 }
 
 /** Which File command this keystroke means, or null. Mac uses ⌘, everything else Ctrl; Alt is
- *  never part of these, so an AltGr composition can't trigger one. */
+ *  never part of these, so an AltGr composition can't trigger one. The letter comes from the
+ *  layout when it is a Latin one (so AZERTY's S is S), else from the physical key: on a Russian
+ *  layout Ctrl+S reports 'ы'. */
 export function commandFor(e: KeyLike): Command | null {
   const mod = e.metaKey || e.ctrlKey
   if (!mod || e.altKey) return null
-  const key = e.key.toLowerCase()
+  const typed = e.key.toLowerCase()
+  const key = /^[a-z]$/.test(typed)
+    ? typed
+    : (/^Key([A-Z])$/.exec(e.code ?? '')?.[1].toLowerCase() ?? typed)
   if (key === 's') return e.shiftKey ? 'saveAs' : 'save'
   if (key === 'o' && !e.shiftKey) return 'open'
   return null

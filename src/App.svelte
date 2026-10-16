@@ -210,7 +210,6 @@
     projectInput.value = ''
   }
   function shortcut(e: KeyboardEvent) {
-    if (isTypingTarget(e.target)) return
     const cmd = commandFor(e)
     if (!cmd) return
     if (cmd === 'open') {

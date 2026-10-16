@@ -18,4 +18,10 @@ describe('commandFor', () => {
     expect(commandFor({ key: 'p', metaKey: true })).toBe(null)
     expect(commandFor({ key: 'Enter', metaKey: true })).toBe(null)
   })
+  it('reads the physical key on a non-Latin layout', () => {
+    expect(commandFor({ key: 'ы', code: 'KeyS', ctrlKey: true })).toBe('save')
+    expect(commandFor({ key: 'щ', code: 'KeyO', ctrlKey: true })).toBe('open')
+    // a Latin layout keeps its own letter, wherever the key sits
+    expect(commandFor({ key: 's', code: 'KeyO', ctrlKey: true })).toBe('save')
+  })
 })
