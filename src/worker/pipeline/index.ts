@@ -9,6 +9,7 @@ import {
   preprocess,
   isIdentityPre,
   globalPre,
+  palettePre,
   effectiveCircles,
   type PreOptions,
 } from './preprocess'
@@ -48,10 +49,11 @@ export function vectorize(
   const src = identity ? image : stage('pre', () => preprocess(image, preOpts))
   const palOpts = globalPre(preOpts)
   const palette = stage('palette', () => {
+    const srcOpts = paletteImage && palettePre(preOpts, paletteImage.width, image.width)
     const palInput = paletteImage
-      ? isIdentityPre(palOpts)
+      ? isIdentityPre(srcOpts!)
         ? paletteImage
-        : preprocess(paletteImage, palOpts)
+        : preprocess(paletteImage, srcOpts!)
       : // No distinct palette source: fall back to the working image, but still strip the
         // circles when any are set — the palette never sees local levels.
         effectiveCircles(options).length > 0

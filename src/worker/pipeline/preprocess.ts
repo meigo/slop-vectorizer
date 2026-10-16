@@ -67,6 +67,14 @@ export function globalPre(o: PreOptions): PreOptions {
   return { ...o, localCircles: [] }
 }
 
+/** The pre-effects for a palette source `sourceWidth` px wide when the working image is
+ *  `workingWidth` px: globalPre with the blur radius (working-image pixels) converted to the
+ *  source's pixels, so the palette sees the artwork blurred exactly as much as segmentation does.
+ *  Unconverted, a ×3 run blurred the ×1 source 3× as hard and thin strokes paled out of it. */
+export function palettePre(o: PreOptions, sourceWidth: number, workingWidth: number): PreOptions {
+  return { ...globalPre(o), blurRadius: (o.blurRadius * sourceWidth) / workingWidth }
+}
+
 /** Local-levels strength at distance d: 1 inside inner, 0 beyond outer, smoothstep between
  *  (no visible band at either ring). inner === outer is a hard edge. */
 export function localWeight(d: number, inner: number, outer: number): number {

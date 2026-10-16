@@ -13,6 +13,7 @@ import {
   preprocess,
   isIdentityPre,
   globalPre,
+  palettePre,
   sameCircleList,
   effectiveCircles,
   type PreOptions,
@@ -53,6 +54,7 @@ interface Cache {
   pre?: RasterImage
   palImage?: RasterImage // scale-invariant palette source (original ×1 decode)
   palPre?: RasterImage // palette source with current pre-effects applied
+  palBlur?: number // the blur radius palPre was made with, in the source's pixels
   palette?: Palette
   seg?: Segmentation
   bounds?: Boundaries
@@ -62,7 +64,7 @@ interface Cache {
 }
 const cache: Cache = { image: null, options: null }
 
-function run(
+export function run(
   image: RasterImage,
   options: PipelineOptions,
   post: (m: WorkerResponse) => void,
@@ -72,7 +74,6 @@ function run(
   const prev = cache.options
   const sameImg = cache.image === image || sameImageData(cache.image, image)
   const from = firstDirtyStage(prev, options, sameImg)
-  const fromIdx = ORDER.indexOf(from)
   const palSrcChanged =
     paletteImage !== undefined && !sameImageData(cache.palImage ?? null, paletteImage)
   if (palSrcChanged) {
@@ -99,6 +100,10 @@ function run(
   // The palette never sees local circles (spec: palette ignores local levels).
   const palOpts = globalPre(preOpts)
   const palIdentity = isIdentityPre(palOpts)
+  const palBase = cache.palImage
+  // The ×1 source's blur, converted from working-image pixels: it changes with the scale too.
+  const srcOpts = palBase && palettePre(preOpts, palBase.width, image.width)
+  const srcBlurChanged = !!srcOpts && cache.palBlur !== srcOpts.blurRadius
   const preFieldsChanged =
     !prev ||
     prev.blackPoint !== options.blackPoint ||
@@ -106,27 +111,31 @@ function run(
     prev.blurRadius !== options.blurRadius ||
     prev.saturation !== options.saturation ||
     prev.flatten !== options.flatten
-  if (preFieldsChanged) cache.palPre = undefined
-  if (fromIdx <= ORDER.indexOf('pre') || !cache.pre)
-    cache.pre = identity ? image : stage('pre', () => preprocess(image, preOpts))
-  const src = cache.pre
+  if (preFieldsChanged || srcBlurChanged) cache.palPre = undefined
   // The palette comes from the scale-invariant source when one is cached, so a
   // working-image change alone (scale re-decode) does NOT re-estimate — swatch
-  // colors stay constant across scale changes by construction.
+  // colors stay constant across scale changes by construction (unless a blur is
+  // set: its radius is in working-image pixels).
   const paletteDirty =
     !cache.palette ||
     palSrcChanged ||
+    srcBlurChanged ||
     preFieldsChanged ||
     !prev ||
     prev.colorCount !== options.colorCount ||
     (!cache.palImage && !sameImg)
+  // A new palette always re-segments, even of the same working image.
+  const fromIdx = Math.min(ORDER.indexOf(from), paletteDirty ? ORDER.indexOf('palette') : Infinity)
+  if (fromIdx <= ORDER.indexOf('pre') || !cache.pre)
+    cache.pre = identity ? image : stage('pre', () => preprocess(image, preOpts))
+  const src = cache.pre
   if (paletteDirty)
     cache.palette = stage('palette', () => {
-      const palBase = cache.palImage
+      if (srcOpts) cache.palBlur = srcOpts.blurRadius
       const palInput = palBase
-        ? palIdentity
+        ? isIdentityPre(srcOpts!)
           ? palBase
-          : (cache.palPre ??= preprocess(palBase, palOpts))
+          : (cache.palPre ??= preprocess(palBase, srcOpts!))
         : // No distinct palette source: fall back to the working image, but still strip the
           // circles when any are set — the palette never sees local levels.
           effectiveCircles(options).length > 0

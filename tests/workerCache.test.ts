@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { firstDirtyStage, sameImageData } from '../src/worker/vectorize.worker'
+import { firstDirtyStage, run, sameImageData } from '../src/worker/vectorize.worker'
+import { vectorize } from '../src/worker/pipeline'
 import { DEFAULT_OPTIONS } from '../src/types'
 import type { RasterImage } from '../src/types'
 
@@ -100,5 +101,59 @@ describe('sameImageData', () => {
     const a: RasterImage = { width, height, data: aData }
     const b: RasterImage = { width, height, data: bData }
     expect(sameImageData(a, b)).toBe(false)
+  })
+})
+
+describe('palette source at another scale', () => {
+  // white with a 2 px red and a 2 px blue stripe, and the same at ×3 (nearest neighbour)
+  const stripes = (s: number, sw = 2): RasterImage => {
+    const w = 120 * s
+    const data = new Uint8ClampedArray(w * w * 4)
+    for (let p = 0; p < w * w; p++) {
+      const y = Math.floor(p / w) / s
+      const c =
+        y >= 30 && y < 30 + sw
+          ? [220, 20, 20]
+          : y >= 60 && y < 60 + sw
+            ? [20, 20, 220]
+            : [255, 255, 255]
+      data.set([...c, 255], p * 4)
+    }
+    return { width: w, height: w, data }
+  }
+  const fills = (svg: string) => [...svg.matchAll(/fill="(#[0-9a-f]{6})"/g)].map((m) => m[1])
+  const opts = { ...DEFAULT_OPTIONS, colorCount: 3, blurRadius: 3 }
+  // the stroke colours stay as strong as the working image's own (#e86464); the over-blurred
+  // source gave #f8cece and #cecef8
+  const ch = (hex: string, i: number) => parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16)
+  const reddish = (hex: string) => ch(hex, 0) > 180 && ch(hex, 1) < 120
+  const bluish = (hex: string) => ch(hex, 2) > 180 && ch(hex, 1) < 120
+
+  it('blurs the ×1 palette source as much, relative to the artwork, as the working image', () => {
+    const out = fills(vectorize(stripes(3), opts, undefined, stripes(1)).svg)
+    expect(out.some(reddish) && out.some(bluish)).toBe(true)
+  })
+  it('the worker does too', () => {
+    let svg = ''
+    run(stripes(3), opts, (m) => m.type === 'result' && (svg = m.result.svg), 1, stripes(1))
+    expect(fills(svg).some(reddish) && fills(svg).some(bluish)).toBe(true)
+  })
+  it('a new palette source re-segments the same working image', () => {
+    const img = stripes(1, 10)
+    const post = () => {}
+    run(img, { ...DEFAULT_OPTIONS, colorCount: 'auto' }, post, 1, stripes(1, 10))
+    // a palette source with fewer colours (no blue stripe) and the same working image
+    const twoTone = stripes(1, 10)
+    for (let p = 0; p < 120 * 120; p++)
+      if (twoTone.data[p * 4 + 2] === 220) twoTone.data.set([255, 255, 255], p * 4)
+    let result = ''
+    run(
+      img,
+      { ...DEFAULT_OPTIONS, colorCount: 'auto' },
+      (m) => m.type === 'result' && (result = m.result.svg),
+      2,
+      twoTone,
+    )
+    expect(fills(result).length).toBeGreaterThan(0)
   })
 })
