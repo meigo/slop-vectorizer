@@ -29,8 +29,10 @@ export function extractBoundaries(
   const lab = (x: number, y: number) =>
     x < 0 || y < 0 || x >= w || y >= h ? -1 : labelMap[y * w + x]
 
-  // --- Sub-pixel refinement, cached per undirected pixel-edge ---
-  const refined = new Map<string, [number, number]>()
+  // --- Sub-pixel refinement per pixel-edge ---
+  // Not cached: a string-keyed map of every edge passed V8's 2^24-entry Map limit on big
+  // dithered scans and was slower than recomputing. Both sides of an edge pass its pixels in
+  // the same order and emit() keeps one side's points, so nothing needs the memo.
   const orig = (x: number, y: number, c: number) => image.data[(y * w + x) * 4 + c]
   /** Fraction of pixel (x,y)'s original color explained by palette color ci vs cj. */
   const coverage = (x: number, y: number, ci: number, cj: number): number => {
@@ -55,25 +57,17 @@ export function extractBoundaries(
    * a's far border, so the formula is exact for arbitrary edge slope, not just 0/90 deg.
    */
   const refineEdge = (ax: number, ay: number, bx: number, by: number): [number, number] => {
-    const k =
-      ax < bx || (ax === bx && ay < by) ? `${ax},${ay},${bx},${by}` : `${bx},${by},${ax},${ay}`
-    const hit = refined.get(k)
-    if (hit) return hit
     const mx = (ax + bx + 1) / 2,
       my = (ay + by + 1) / 2 // midpoint of the two pixel centers
-    let out: [number, number] = [mx, my]
     const ra = lab(ax, ay),
       rb = lab(bx, by)
-    if (ra >= 0 && rb >= 0) {
-      const ca = seg.regionColor[ra],
-        cb = seg.regionColor[rb]
-      const fa = coverage(ax, ay, ca, cb) // fraction of A-color in pixel a
-      const fb = coverage(bx, by, ca, cb) // fraction of A-color in pixel b
-      const t = Math.max(-0.5, Math.min(1.5, fa + fb - 0.5))
-      out = [mx + (bx - ax) * (t - 0.5), my + (by - ay) * (t - 0.5)]
-    }
-    refined.set(k, out)
-    return out
+    if (ra < 0 || rb < 0) return [mx, my]
+    const ca = seg.regionColor[ra],
+      cb = seg.regionColor[rb]
+    const fa = coverage(ax, ay, ca, cb) // fraction of A-color in pixel a
+    const fb = coverage(bx, by, ca, cb) // fraction of A-color in pixel b
+    const t = Math.max(-0.5, Math.min(1.5, fa + fb - 0.5))
+    return [mx + (bx - ax) * (t - 0.5), my + (by - ay) * (t - 0.5)]
   }
 
   // --- Collect directed edges per region ---
