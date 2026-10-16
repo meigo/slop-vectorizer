@@ -48,7 +48,13 @@ const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'A
 
 async function writeTo(handle: FileSystemFileHandle, data: Blob | string): Promise<void> {
   const w = await handle.createWritable()
-  await w.write(data)
+  try {
+    await w.write(data)
+  } catch (err) {
+    // Close the stream without committing: left open, Chromium keeps it and its .crswap file.
+    await w.abort().catch(() => {})
+    throw err
+  }
   await w.close()
 }
 

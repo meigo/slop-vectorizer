@@ -84,4 +84,22 @@ describe('writeProjectFile', () => {
     expect(JSON.stringify(seen)).toContain('.zip')
     delete (globalThis as { window?: unknown }).window
   })
+
+  it('aborts the open stream when a write fails, and still reports the failure', async () => {
+    let aborted = false
+    const handle = {
+      name: 'logo.vectorizer.zip',
+      createWritable: async () => ({
+        write: async () => {
+          throw new DOMException('disk full', 'QuotaExceededError')
+        },
+        close: async () => {},
+        abort: async () => void (aborted = true),
+      }),
+    } as unknown as FileSystemFileHandle
+    await expect(writeProjectFile(new Blob([]), 'x.zip', handle, false)).rejects.toThrow(
+      'disk full',
+    )
+    expect(aborted).toBe(true)
+  })
 })
