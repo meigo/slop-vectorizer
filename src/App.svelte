@@ -249,43 +249,56 @@
     }
   }
 
-  /** Open a .zip project: unpack, prime the palette source at ×1 if the saved scale isn't
-   *  ×1, then decode once at the saved scale. */
+  // Every load (an image or a project) takes a ticket; after each await only the newest load may
+  // go on, so a slow decode never installs over a file chosen after it.
+  let loadSeq = 0
+
+  /** The ×1 decode (the palette source) and the decode at the working scale. Both happen before a
+   *  load touches the session, so a file that won't decode leaves the current work as it was. */
+  async function decodeForLoad(file: Blob, at: number) {
+    const base = await fileToRasterImage(file, 1)
+    return { base: base.image, decoded: at === 1 ? base : await fileToRasterImage(file, at) }
+  }
+
+  /** Replace the session with `file`. Whatever the old one had queued is dropped with it. */
+  function startSession(file: File, name: string, base: RasterImage) {
+    clearTimeout(debounce)
+    clearTimeout(autosaveTimer) // it would store the new session before its first result
+    sourceFile = file
+    projectName = name
+    forgetSave()
+    forgetProjectSave()
+    preserveNextFraming = false
+    baseImage = base
+    fittedW = 0
+    fittedH = 0
+  }
+
+  /** Open a .zip project. True once it replaced the session. */
   async function openProject(file: File, fileName = file.name): Promise<boolean> {
-    const prevSource = sourceFile
-    let d
+    const ticket = ++loadSeq
+    let d, loaded
     try {
       d = await unpackProject(file, fileName)
     } catch (e) {
-      error = errorMessage(e)
+      if (ticket === loadSeq) error = errorMessage(e)
       return false
     }
-    // A newer openProject call already took over while this one was unpacking — don't let
-    // this call's stale continuation undo it.
-    if (sourceFile !== prevSource) return false
     const src = new File([d.source], d.sourceName || 'image', { type: d.source.type })
-    sourceFile = src
-    projectName = d.name
-    forgetSave()
-    forgetProjectSave()
+    try {
+      loaded = await decodeForLoad(src, d.scale)
+    } catch {
+      if (ticket === loadSeq) error = UNDECODABLE
+      return false
+    }
+    if (ticket !== loadSeq) return false // a newer load took over meanwhile
+    startSession(src, d.name, loaded.base)
     options = d.options
     selected = d.options.localCircles.length > 0 ? 0 : -1
     lastPalette = null
-    baseImage = null
-    image = null
-    result = null
-    fittedW = 0
-    fittedH = 0
     scale = d.scale
     lastScale = d.scale
-    if (d.scale !== 1) {
-      try {
-        baseImage = (await fileToRasterImage(src, 1)).image
-      } catch {
-        /* decodeAndRun reports a bad source */
-      }
-    }
-    await decodeAndRun(src)
+    void decodeAndRun(src, loaded.decoded)
     return true
   }
 
@@ -432,14 +445,18 @@
 
   const UNDECODABLE = 'Could not decode that file — try a PNG, JPEG, GIF, or WebP.'
 
+  let decodeSeq = 0
+
   /** `decoded` skips the decode when the caller already has it at the current scale. */
   async function decodeAndRun(file: Blob, decoded?: DecodeResult) {
+    const run = ++decodeSeq
     error = null
     notice = null
     result = null
     stage = null
     try {
       const { image: img, clamped } = decoded ?? (await fileToRasterImage(file, scale))
+      if (run !== decodeSeq) return // a newer image or scale took over during the decode
       if (clamped) notice = 'Large image was downscaled to 4096px'
       image = img
       if (scale === 1) baseImage = img // ×1 decode = the palette source
@@ -453,7 +470,8 @@
       scheduleAutosave()
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (msg === 'cancelled') return // superseded by a newer call; let that call own the UI state
+      // superseded by a newer call; let that call own the UI state
+      if (msg === 'cancelled' || run !== decodeSeq) return
       error = msg === 'undecodable' ? UNDECODABLE : msg
       stage = null
     }
@@ -467,31 +485,22 @@
       void openProject(file)
       return
     }
-    // Decode before touching the session: over the editor, an undecodable file must leave the
-    // current work exactly as it was. This ×1 decode is also the palette source, and at ×1 it is
-    // the one decodeAndRun would make.
-    const prevSource = sourceFile
-    let decoded: DecodeResult
+    const ticket = ++loadSeq
+    const at = scale
+    let loaded
     try {
-      decoded = await fileToRasterImage(file, 1)
+      loaded = await decodeForLoad(file, at)
     } catch {
-      error = UNDECODABLE
+      if (ticket === loadSeq) error = UNDECODABLE
       return
     }
-    if (sourceFile !== prevSource) return // a newer file arrived while this one decoded
+    if (ticket !== loadSeq) return // a newer load took over meanwhile
     // A new image starts with no circles; the scale and other settings carry over.
-    clearTimeout(debounce) // a slider rerun queued for the old image
-    sourceFile = file
-    projectName = nameFromFile(file.name)
-    forgetSave()
-    forgetProjectSave()
-    preserveNextFraming = false
-    baseImage = scale === 1 ? null : decoded.image
-    fittedW = 0
-    fittedH = 0
+    startSession(file, nameFromFile(file.name), loaded.base)
     selected = -1
     options.localCircles = []
-    void decodeAndRun(file, scale === 1 ? decoded : undefined)
+    // the scale was changed during the decode: decode again at the new one
+    void decodeAndRun(file, scale === at ? loaded.decoded : undefined)
   }
 
   // New image picks a file first and only then replaces the session, so cancelling the picker
