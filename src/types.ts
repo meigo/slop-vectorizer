@@ -125,6 +125,7 @@ export type WorkerResponse =
       jobId: number
       result: VectorResult
       preImage?: RasterImage
+      preKept?: boolean // preImage is the previous result's, not sent again
       palette: number[]
     }
   | { type: 'error'; jobId: number; stage: StageName | 'unknown'; message: string }

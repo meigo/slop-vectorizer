@@ -95,8 +95,10 @@
     document.title = sourceFile ? `${projectName || 'vectorized'} — slop-vectorizer` : homeTitle
   })
   let scale = $state(1)
-  let image = $state<RasterImage | null>(null)
-  let result = $state<ClientResult | null>(null)
+  // Raw: only ever replaced whole, and proxying would copy the pixels on every snapshot and
+  // give the same preprocessed bitmap a new identity with every result.
+  let image = $state.raw<RasterImage | null>(null)
+  let result = $state.raw<ClientResult | null>(null)
   let stage = $state<StageName | null>(null)
   let error = $state<string | null>(null)
   let notice = $state<string | null>(null)
@@ -591,11 +593,7 @@
     debounce = setTimeout(async () => {
       if (!image) return
       try {
-        result = await client.vectorize(
-          $state.snapshot(image),
-          $state.snapshot(options),
-          (s) => (stage = s),
-        )
+        result = await client.vectorize(image, $state.snapshot(options), (s) => (stage = s))
         stage = null
         scheduleAutosave()
       } catch (e) {

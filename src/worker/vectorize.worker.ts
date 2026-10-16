@@ -23,7 +23,15 @@ function run(
     (stage) => post({ type: 'progress', jobId, stage }),
     paletteImage,
   )
-  post({ type: 'result', jobId, ...r })
+  // The preprocessed bitmap only when it changed: the client keeps the last one (64 MB at 4096²).
+  const { preImage, preRan, result, palette } = r
+  post({
+    type: 'result',
+    jobId,
+    result,
+    palette,
+    ...(preImage && (preRan ? { preImage } : { preKept: true })),
+  })
 }
 
 if (typeof self !== 'undefined' && 'postMessage' in self && typeof document === 'undefined') {

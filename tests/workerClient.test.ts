@@ -91,3 +91,30 @@ describe('VectorizerClient worker failures', () => {
     await expect(p).rejects.toThrow(/reload/)
   })
 })
+
+describe('VectorizerClient preprocessed bitmap', () => {
+  it('a result marked preKept carries the previous preImage', async () => {
+    instances.length = 0
+    const client = new VectorizerClient()
+    const pre: RasterImage = { width: 1, height: 1, data: new Uint8ClampedArray([1, 2, 3, 255]) }
+    const base = {
+      result: { svg: '<svg/>', stats: { pathCount: 0, pointCount: 0, timings: {} } },
+      palette: [],
+    }
+    const p1 = client.vectorize(image, DEFAULT_OPTIONS)
+    instances[0].onmessage?.({
+      data: { type: 'result', jobId: 1, ...base, preImage: pre },
+    } as MessageEvent<WorkerResponse>)
+    expect((await p1).preImage).toBe(pre)
+    const p2 = client.vectorize(image, DEFAULT_OPTIONS)
+    instances[0].onmessage?.({
+      data: { type: 'result', jobId: 2, ...base, preKept: true },
+    } as MessageEvent<WorkerResponse>)
+    expect((await p2).preImage).toBe(pre) // the same object: the panes don't redraw it
+    const p3 = client.vectorize(image, DEFAULT_OPTIONS)
+    instances[0].onmessage?.({
+      data: { type: 'result', jobId: 3, ...base },
+    } as MessageEvent<WorkerResponse>)
+    expect((await p3).preImage).toBeUndefined() // pre-effects off
+  })
+})

@@ -14,6 +14,8 @@ export class VectorizerClient {
   // load (a 404 after a redeploy, a flaky network) fires its one error before any job is posted,
   // and every later job would wait forever.
   private failed: Error | null = null
+  // The last preprocessed bitmap the worker sent; a result with preKept reuses it.
+  private lastPre: RasterImage | undefined
 
   constructor() {
     this.worker = this.spawn()
@@ -24,6 +26,7 @@ export class VectorizerClient {
       type: 'module',
     })
     this.failed = null
+    this.lastPre = undefined
     // A load failure is a plain Event with no message.
     w.onerror = (e) => {
       this.failed = new Error(e.message || 'The vectorizer stopped working — reload the page.')
@@ -51,7 +54,8 @@ export class VectorizerClient {
         if (m.type === 'progress') onProgress?.(m.stage)
         else if (m.type === 'result') {
           this.pending = null
-          resolve({ ...m.result, preImage: m.preImage, palette: m.palette })
+          this.lastPre = m.preKept ? this.lastPre : m.preImage
+          resolve({ ...m.result, preImage: this.lastPre, palette: m.palette })
         } else {
           this.pending = null
           reject(new Error(`${m.stage}: ${m.message}`))

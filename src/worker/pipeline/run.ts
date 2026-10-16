@@ -83,6 +83,7 @@ export const newCache = (): PipelineCache => ({ image: null, options: null })
 export interface RunResult {
   result: VectorResult
   preImage?: RasterImage // the preprocessed bitmap, when any pre-effect is active
+  preRan: boolean // whether this run made preImage, or reused the cached one
   palette: number[]
 }
 
@@ -155,14 +156,15 @@ export function runPipeline(
     (!cache.palImage && !sameImg)
   // A new palette always re-segments, even of the same working image.
   const fromIdx = Math.min(ORDER.indexOf(from), paletteDirty ? ORDER.indexOf('palette') : Infinity)
-  if (fromIdx <= ORDER.indexOf('pre') || !cache.pre)
+  const preRan = fromIdx <= ORDER.indexOf('pre') || !cache.pre
+  if (preRan)
     cache.pre = identity
       ? image
       : stage('pre', () => {
           cache.workTones = tonesFor(cache.workTones, image, options.flatten, options.blurRadius)
           return preprocess(image, preOpts, cache.workTones?.tones)
         })
-  const src = cache.pre
+  const src = cache.pre!
   const noCircles = effectiveCircles(options).length === 0
   if (paletteDirty)
     cache.palette = stage('palette', () => {
@@ -262,6 +264,7 @@ export function runPipeline(
   return {
     result: { svg, stats: { pathCount, pointCount, timings } },
     ...(identity ? {} : { preImage: src }),
+    preRan,
     palette: Array.from(cache.palette!.colors),
   }
 }
