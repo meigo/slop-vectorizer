@@ -12,6 +12,7 @@
   import type { LocalCircle, PipelineOptions, PipelineStats } from '../types'
   import { maxGapClosing } from './decode'
   import { IDENTITY_PRE } from '../worker/pipeline/preprocess'
+  import { overrideFill } from '../worker/pipeline/svg'
   import FileMenu from './FileMenu.svelte'
   import { sliderFill } from './sliderFill'
 
@@ -98,9 +99,6 @@
     oncircle: (i: number, c: LocalCircle) => void
   } = $props()
 
-  const rgbHex = (p: number[], i: number) =>
-    '#' +
-    [p[3 * i], p[3 * i + 1], p[3 * i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')
   function setOverride(i: number, hexColor: string) {
     const k = (palette?.length ?? 0) / 3
     const arr = options.colorOverrides
@@ -243,7 +241,7 @@
       {#if palette && palette.length >= 3}
         <div class="swatches">
           {#each { length: palette.length / 3 } as _, i}
-            {@const effective = options.colorOverrides?.[i] ?? rgbHex(palette, i)}
+            {@const effective = overrideFill(options.colorOverrides?.[i], palette, i)}
             <label
               class="swatch"
               class:overridden={!!options.colorOverrides?.[i]}
