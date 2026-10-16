@@ -12,6 +12,33 @@ describe('extractBoundaries', () => {
   const all = extractBoundaries(img, seg, pal)
   const circleRegion = () => all.regions.find((r) => seg.regionSize[r.region] < (64 * 64) / 2)!
 
+  it('outlines reaching an image corner pass through the corner itself', () => {
+    const sq = renderShape(
+      20,
+      12,
+      (x, y) => x >= 6 && x < 12 && y >= 3 && y < 9,
+      [0, 0, 0],
+      [220, 20, 20],
+    )
+    const p2 = estimatePalette(sq, 2)
+    const s2 = segmentImage(sq, p2, 4)
+    const b = extractBoundaries(sq, s2, p2)
+    const bg = b.regions.find((r) => s2.regionSize[r.region] > 100)!
+    const hasAll = (pts: Float64Array, corners: number[][]) =>
+      corners.every(([x, y]) => {
+        for (let i = 0; i < pts.length; i += 2) if (pts[i] === x && pts[i + 1] === y) return true
+        return false
+      })
+    // not cut diagonally from (0.5,0) to (0,0.5), leaving a transparent notch
+    const corners = [
+      [0, 0],
+      [20, 0],
+      [20, 12],
+      [0, 12],
+    ]
+    expect(bg.loops.some((l) => hasAll(loopPointsOf(b.arcs, l), corners))).toBe(true)
+  })
+
   it('circle region has exactly one loop', () => {
     expect(circleRegion().loops.length).toBe(1)
   })
@@ -112,8 +139,9 @@ describe('extractBoundaries: shared arcs', () => {
       }
     }
     expect(endpoints.size).toBeGreaterThan(0)
-    // the three regions meet exactly where the rectangles touch the background
-    expect([...endpoints].sort()).toEqual(['60,20', '60,60'])
+    // the three regions meet exactly where the rectangles touch the background; the image's
+    // corners end the border arcs
+    expect([...endpoints].sort()).toEqual(['0,0', '0,80', '120,0', '120,80', '60,20', '60,60'])
   })
 
   it('arcs: dedup holds on a dense image where every vertex is a junction', () => {
@@ -188,14 +216,14 @@ describe('extractBoundaries: diagonal junction', () => {
   it('the pinched region gets an outer loop plus a hole loop', () => {
     const a = byRegion(7)
     expect(a.loops.length).toBe(2)
-    // 12 edge midpoints + 2 junction vertices on the outer loop; the hole's neighbour
-    // never changes, so it stays a 4-point closed arc.
-    expect(a.loops.map((l) => pointsOf(l).length / 2).sort((x, y) => x - y)).toEqual([4, 14])
+    // 12 edge midpoints + 2 junction vertices + 1 image corner on the outer loop; the hole's
+    // neighbour never changes, so it stays a 4-point closed arc.
+    expect(a.loops.map((l) => pointsOf(l).length / 2).sort((x, y) => x - y)).toEqual([4, 15])
   })
 
-  it('the outer loop is cut into two arcs at the image-border junctions', () => {
+  it('the outer loop is cut into arcs at the junctions and the image corner', () => {
     const outer = byRegion(7).loops.find((l) => l.length > 1)!
-    expect(outer.length).toBe(2)
+    expect(outer.length).toBe(3)
     for (const ref of outer) expect(all.arcs[ref.arc].closed).toBe(false)
   })
 

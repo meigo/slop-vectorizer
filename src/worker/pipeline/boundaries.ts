@@ -128,6 +128,11 @@ export function extractBoundaries(
   const arcByKey = new Map<number, number>() // min edge id -> arc index
   const vertX = (v: number) => v % (w + 1)
   const vertY = (v: number) => (v / (w + 1)) | 0
+  const isImageCorner = (v: number) => {
+    const x = vertX(v),
+      y = vertY(v)
+    return (x === 0 || x === w) && (y === 0 || y === h)
+  }
   /** Store the arc under its identity, or reference the copy the other side stored. */
   const emit = (minEdge: number, points: Float64Array, closed: boolean): ArcRef => {
     const existing = arcByKey.get(minEdge)
@@ -215,10 +220,15 @@ export function extractBoundaries(
             mid[2 * i + 1] = (ayv + byv) / 2
           }
         }
-        // Cut the loop into arcs at the vertices where the neighbouring region changes
+        // Cut the loop into arcs at the vertices where the neighbouring region changes, and at
+        // the image's corners: there the outline turns but the neighbour (outside) does not, and
+        // without a junction the corner itself was never a point, so the fit cut it diagonally
+        // and left a transparent notch. Only one region traces a border edge, so this cut
+        // can't split a shared arc differently on its two sides.
+        const cutAt = (i: number) => nbr[i] !== nbr[(i - 1 + m) % m] || isImageCorner(verts[i])
         let startI = -1
         for (let i = 0; i < m; i++)
-          if (nbr[i] !== nbr[(i - 1 + m) % m]) {
+          if (cutAt(i)) {
             startI = i
             break
           }
@@ -231,7 +241,6 @@ export function extractBoundaries(
         } else {
           let i = startI
           do {
-            const runNbr = nbr[i]
             const pts: number[] = [vertX(verts[i]), vertY(verts[i])] // start junction
             let minE = Infinity
             let j = i
@@ -239,7 +248,7 @@ export function extractBoundaries(
               pts.push(mid[2 * j], mid[2 * j + 1])
               minE = Math.min(minE, eid[j])
               j = (j + 1) % m
-            } while (nbr[j] === runNbr && j !== startI)
+            } while (!cutAt(j) && j !== startI)
             pts.push(vertX(verts[j]), vertY(verts[j])) // end junction
             loopRefs.push(emit(minE, new Float64Array(pts), false))
             i = j
