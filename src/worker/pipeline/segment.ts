@@ -81,36 +81,78 @@ export function segmentImage(
     }
     return i
   }
+  // Borders are counted per small region from its own pixels, not in one map of every
+  // (small, neighbour) pair: a dithered scan has millions of one-pixel regions, and that map
+  // passed V8's 2^24-entry Map limit. A small region has under despeckleSize (≤ 64) pixels,
+  // so its neighbour list stays short.
+  //
+  // Ties and merge order match a raster scan that visits each edge once at its upper-left pixel
+  // (right edge before down edge, the upper-left pixel's region first): `order` is the scan
+  // position at which a pair, or a small region, is first seen.
+  const nbRegion: number[] = [],
+    nbCount: number[] = [],
+    nbOrder: number[] = []
   for (let pass = 0; pass < 8; pass++) {
     let changed = false
-    const border = new Map<string, number>() // "small,neighbor" -> shared edge count
+    // pixels of each small region, grouped by region in raster order
+    const start = new Int32Array(regionCount + 1)
     for (let p = 0; p < n; p++) {
-      const a = find(label[p]),
-        x = p % w
-      const consider = (q: number) => {
-        const b = find(label[q])
-        if (a === b) return
-        for (const [s, o] of [
-          [a, b],
-          [b, a],
-        ] as const)
-          if (sizes[s] < despeckleSize) {
-            const key = s + ',' + o
-            border.set(key, (border.get(key) ?? 0) + 1)
-          }
+      const r = find(label[p])
+      if (sizes[r] < despeckleSize) start[r + 1]++
+    }
+    for (let i = 0; i < regionCount; i++) start[i + 1] += start[i]
+    const pix = new Int32Array(start[regionCount])
+    const fill = start.slice(0, regionCount)
+    for (let p = 0; p < n; p++) {
+      const r = find(label[p])
+      if (sizes[r] < despeckleSize) pix[fill[r]++] = p
+    }
+    const small: number[] = [],
+      target: number[] = [],
+      firstSeen: number[] = []
+    for (let s = 0; s < regionCount; s++) {
+      if (start[s] === start[s + 1]) continue
+      nbRegion.length = nbCount.length = nbOrder.length = 0
+      let seen = Infinity
+      const consider = (p: number, q: number, down: number) => {
+        const o = find(label[q])
+        if (o === s) return
+        const u = Math.min(p, q)
+        const order = 2 * (2 * u + down) + (p === u ? 0 : 1)
+        let i = nbRegion.indexOf(o)
+        if (i < 0) {
+          i = nbRegion.push(o) - 1
+          nbCount.push(0)
+          nbOrder.push(order)
+        }
+        nbCount[i]++
+        if (order < nbOrder[i]) nbOrder[i] = order
+        if (order < seen) seen = order
       }
-      if (x < w - 1) consider(p + 1)
-      if (p + w < n) consider(p + w)
+      for (let j = start[s]; j < start[s + 1]; j++) {
+        const p = pix[j],
+          x = p % w
+        if (x > 0) consider(p, p - 1, 0)
+        if (x < w - 1) consider(p, p + 1, 0)
+        if (p >= w) consider(p, p - w, 1)
+        if (p + w < n) consider(p, p + w, 1)
+      }
+      if (nbRegion.length === 0) continue
+      let best = 0
+      for (let i = 1; i < nbRegion.length; i++)
+        if (
+          nbCount[i] > nbCount[best] ||
+          (nbCount[i] === nbCount[best] && nbOrder[i] < nbOrder[best])
+        )
+          best = i
+      small.push(s)
+      target.push(nbRegion[best])
+      firstSeen.push(seen)
     }
-    const bestTarget = new Map<number, [number, number]>() // small -> [neighbor, count]
-    for (const [key, count] of border) {
-      const [s, o] = key.split(',').map(Number)
-      const cur = bestTarget.get(s)
-      if (!cur || count > cur[1]) bestTarget.set(s, [o, count])
-    }
-    for (const [s, [o]] of bestTarget) {
-      const rs = find(s),
-        ro = find(o)
+    const byScan = small.map((_, i) => i).sort((a, b) => firstSeen[a] - firstSeen[b])
+    for (const i of byScan) {
+      const rs = find(small[i]),
+        ro = find(target[i])
       if (rs === ro || sizes[rs] >= despeckleSize) continue
       alias[rs] = ro
       sizes[ro] += sizes[rs]

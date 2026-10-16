@@ -25,6 +25,20 @@ describe('segmentImage', () => {
     const seg = segmentImage(img, pal, 4)
     expect([...seg.regionSize].reduce((a, b) => a + b, 0)).toBe(64 * 64)
   })
+
+  it('despeckles a dithered image with more small-region borders than a Map can hold', () => {
+    // A 2100² checkerboard: 4.4M one-pixel regions and ~17.6M (small, neighbour) pairs, past
+    // V8's 2^24 Map limit, as a big 50% Floyd–Steinberg dither gets.
+    const w = 2100
+    const data = new Uint8ClampedArray(w * w * 4)
+    for (let p = 0; p < w * w; p++) {
+      const v = ((p % w) + ((p / w) | 0)) % 2 ? 0 : 255
+      data.set([v, v, v, 255], p * 4)
+    }
+    const bw = { k: 2, colors: new Uint8ClampedArray([0, 0, 0, 255, 255, 255]) }
+    const seg = segmentImage({ width: w, height: w, data }, bw, 4)
+    expect(seg.regionCount).toBeLessThan(w * w)
+  }, 60_000)
 })
 
 const INK = 30,
