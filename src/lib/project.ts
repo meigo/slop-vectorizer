@@ -5,6 +5,7 @@
  *  Pure: no DOM, no storage. Everything that decides the format lives here. */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { DEFAULT_OPTIONS, type LocalCircle, type PipelineOptions } from '../types'
+import { maxGapClosing, SCALES } from './decode'
 
 export const PROJECT_VERSION = 2
 
@@ -66,6 +67,35 @@ function readCircle(v: unknown, hidden: boolean): LocalCircle | null {
     whitePoint: c.whitePoint as number,
     hidden: typeof c.hidden === 'boolean' ? c.hidden : hidden,
   }
+}
+
+/** The ranges the UI offers. A value of the wrong type takes the default; a number outside the
+ *  range is clamped. Out-of-range values are not harmless: a huge blurRadius hangs the worker's
+ *  blur loop, and a null slider value crashes the editor's `toFixed`. */
+const RANGES: Partial<Record<keyof PipelineOptions, [number, number]>> = {
+  smoothness: [0, 1],
+  despeckleSize: [1, 64],
+  blackPoint: [0, 254],
+  whitePoint: [1, 255],
+  blurRadius: [0, 10],
+  saturation: [0, 2],
+  flatten: [0, 1],
+}
+const FLAGS = ['mergePaths', 'transparentBg', 'optimize', 'stackedShapes'] as const
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+function readOptions(saved: Record<string, unknown>, scale: number) {
+  const out: Partial<PipelineOptions> = {}
+  for (const [key, [lo, hi]] of Object.entries(RANGES) as [keyof PipelineOptions, number[]][])
+    if (NUM(saved[key])) (out as Record<string, number>)[key] = clamp(saved[key] as number, lo, hi)
+  for (const key of FLAGS) if (typeof saved[key] === 'boolean') out[key] = saved[key]
+  const k = saved.colorCount
+  if (k === 'auto') out.colorCount = 'auto'
+  else if (NUM(k)) out.colorCount = clamp(Math.round(k as number), 2, 16)
+  if (NUM(saved.gapClosing))
+    out.gapClosing = clamp(Math.round(saved.gapClosing as number), 0, maxGapClosing(scale))
+  return out
 }
 
 // An untrusted, hand-edited project could carry an arbitrarily long circle list, which
@@ -174,16 +204,19 @@ export async function unpackProject(zip: Blob, fileName = ''): Promise<ProjectDa
 
   // Unknown keys are ignored and missing ones default, so older projects keep opening as the
   // app gains options. The project file is untrusted input, so it's validated rather than
-  // trusted wholesale: a malformed `options` falls back to {}, and colorOverrides — the one
-  // field that reaches {@html} output via assembleSvg — is sanitised to clean hex colors only.
+  // trusted wholesale: a malformed `options` falls back to {}, every value is type-checked and
+  // clamped to the UI's range, and colorOverrides — the one field that reaches {@html} output
+  // via assembleSvg — is sanitised to clean hex colors only.
   const rawOptions = parsed.options
   const saved: Partial<PipelineOptions> =
     typeof rawOptions === 'object' && rawOptions !== null && !Array.isArray(rawOptions)
       ? (rawOptions as Partial<PipelineOptions>)
       : {}
+  // Only a scale the UI offers: anything else (negative, huge) would slip past the size cap.
+  const scale = SCALES.includes(parsed.scale as number) ? (parsed.scale as number) : 1
   const options: PipelineOptions = {
     ...DEFAULT_OPTIONS,
-    ...saved,
+    ...readOptions(saved as Record<string, unknown>, scale),
     colorOverrides: sanitizeColorOverrides((saved as { colorOverrides?: unknown }).colorOverrides),
     localCircles: readCircles(parsed, saved),
   }
@@ -197,7 +230,7 @@ export async function unpackProject(zip: Blob, fileName = ''): Promise<ProjectDa
       typeof parsed.name === 'string'
         ? parsed.name
         : nameFromProjectFile(fileName) || nameFromFile(sourceName),
-    scale: typeof parsed.scale === 'number' ? parsed.scale : 1,
+    scale,
     options,
   }
 }

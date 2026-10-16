@@ -159,6 +159,59 @@ describe('compatibility', () => {
     expect(back.options.colorOverrides).toEqual([null, '#00ff00', null])
   })
 
+  describe('untrusted option values', () => {
+    const open = (options: unknown, scale: unknown = 1) =>
+      unpackProject(
+        zipOf({ app: 'slop-vectorizer', version: 2, sourceName: 'x.png', scale, options }),
+      )
+
+    it('replaces values of the wrong type with the defaults', async () => {
+      const back = await open({
+        smoothness: null,
+        despeckleSize: '4',
+        mergePaths: 1,
+        colorCount: 'many',
+        blurRadius: Infinity,
+      })
+      expect(back.options).toEqual(DEFAULT_OPTIONS)
+    })
+    it('clamps numbers into the ranges the sliders offer', async () => {
+      const back = await open({
+        blurRadius: 1e20,
+        smoothness: -3,
+        despeckleSize: 1e9,
+        blackPoint: -10,
+        whitePoint: 900,
+        saturation: 50,
+        flatten: 2,
+        gapClosing: 100,
+      })
+      expect(back.options).toMatchObject({
+        blurRadius: 10,
+        smoothness: 0,
+        despeckleSize: 64,
+        blackPoint: 0,
+        whitePoint: 255,
+        saturation: 2,
+        flatten: 1,
+        gapClosing: 3,
+      })
+    })
+    it('keeps the colour count a whole number from 2 to 16', async () => {
+      expect((await open({ colorCount: 3.5 })).options.colorCount).toBe(4)
+      expect((await open({ colorCount: 99 })).options.colorCount).toBe(16)
+      expect((await open({ colorCount: 'auto' })).options.colorCount).toBe('auto')
+    })
+    it('caps gap closing at the saved scale', async () => {
+      expect((await open({ gapClosing: 100 }, 3)).options.gapClosing).toBe(9)
+    })
+    it('opens an unknown scale at ×1', async () => {
+      expect((await open({}, -1)).scale).toBe(1)
+      expect((await open({}, 7)).scale).toBe(1)
+      expect((await open({}, 0.5)).scale).toBe(0.5)
+    })
+  })
+
   it('falls back to default options when options is not a plain object', async () => {
     const back = await unpackProject(
       zipOf({
