@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { clipboardTypes, imageType } from '../src/lib/clipboard'
+import { describe, expect, it, vi } from 'vitest'
+import { clipboardTypes, imageType, readClipboardImage } from '../src/lib/clipboard'
 
 describe('imageType', () => {
   it('picks the first image/* type', () => {
@@ -20,5 +20,24 @@ describe('clipboardTypes', () => {
   it('says "nothing" for an empty clipboard', () => {
     expect(clipboardTypes([])).toBe('nothing')
     expect(clipboardTypes([{ types: [] }])).toBe('nothing')
+  })
+})
+
+describe('readClipboardImage', () => {
+  it('reports an image that fails to load instead of rejecting', async () => {
+    const item = {
+      types: ['image/png'],
+      getType: () => Promise.reject(new DOMException('gone', 'NotFoundError')),
+    }
+    vi.stubGlobal('navigator', { clipboard: { read: async () => [item] } })
+    try {
+      const r = await readClipboardImage()
+      expect(r).toEqual({
+        kind: 'error',
+        message: "Can't read the clipboard (NotFoundError: gone)",
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

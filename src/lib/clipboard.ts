@@ -19,25 +19,25 @@ export type ClipboardRead = { kind: 'image'; file: File } | { kind: 'error'; mes
 /** The first image on the system clipboard. Call it straight from the tap: `read()` runs before
  *  any await, so Safari still counts it as the user's. */
 export async function readClipboardImage(): Promise<ClipboardRead> {
-  let items: ClipboardItems
   try {
     if (!navigator.clipboard?.read) throw new Error('not supported in this browser')
-    items = await navigator.clipboard.read()
+    const items = await navigator.clipboard.read()
+    for (const item of items) {
+      const type = imageType(item.types)
+      if (!type) continue
+      // can still reject (an image from another device that fails to arrive)
+      const blob = await item.getType(type)
+      // Nameless, like a pasted file, so the SVG is saved as vectorized.svg.
+      return { kind: 'image', file: new File([blob], '', { type }) }
+    }
+    return {
+      kind: 'error',
+      message: `No image on the clipboard (it holds: ${clipboardTypes(items)})`,
+    }
   } catch (e) {
     // Say what the browser said: a dismissed Paste callout, a blocked permission and no support
     // each have a different remedy.
     const why = e instanceof Error ? `${e.name}: ${e.message}` : String(e)
     return { kind: 'error', message: `Can't read the clipboard (${why})` }
-  }
-  for (const item of items) {
-    const type = imageType(item.types)
-    if (!type) continue
-    const blob = await item.getType(type)
-    // Nameless, like a pasted file, so the SVG is saved as vectorized.svg.
-    return { kind: 'image', file: new File([blob], '', { type }) }
-  }
-  return {
-    kind: 'error',
-    message: `No image on the clipboard (it holds: ${clipboardTypes(items)})`,
   }
 }
