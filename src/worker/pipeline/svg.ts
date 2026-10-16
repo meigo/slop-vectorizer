@@ -134,7 +134,7 @@ export function assembleSvg(
       const g = byColor.get(p.paletteIndex)
       if (g) {
         g.area += p.area
-        g.loops.push(...p.loops)
+        for (const l of p.loops) g.loops.push(l) // not push(...): see maxIndex
       } else
         byColor.set(p.paletteIndex, {
           paletteIndex: p.paletteIndex,

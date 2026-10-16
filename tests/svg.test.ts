@@ -62,6 +62,13 @@ describe('svg assembly', () => {
     expect(red.match(/M/g)!.length).toBe(2)
   })
 
+  it('mergePaths: a later region with hundreds of thousands of loops does not overflow', () => {
+    // a halftone background: one region of the colour, then one riddled with dot holes
+    const dotty: RegionPath = { ...square, area: 50, loops: Array(300_000).fill(square.loops[0]) }
+    const svg = assembleSvg([square, dotty], palette, 20, 20, { ...OPT, mergePaths: true })
+    expect(svg.match(/M/g)!.length).toBe(300_001)
+  })
+
   it('transparentBg drops all background-colored regions', () => {
     const bgPocket: RegionPath = {
       paletteIndex: 0,
