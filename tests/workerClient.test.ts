@@ -75,3 +75,19 @@ describe('VectorizerClient concurrent vectorize() calls', () => {
     expect(res.palette).toEqual([10, 20, 30, 240, 240, 240])
   })
 })
+
+describe('VectorizerClient worker failures', () => {
+  it('a worker that failed to load before the first job rejects that job with a message', async () => {
+    instances.length = 0
+    const client = new VectorizerClient()
+    instances[0].onerror?.({ message: '' }) // the chunk 404s: an error event with no message
+    await expect(client.vectorize(image, DEFAULT_OPTIONS)).rejects.toThrow(/reload/)
+  })
+  it('a crash during a job rejects it with a message', async () => {
+    instances.length = 0
+    const client = new VectorizerClient()
+    const p = client.vectorize(image, DEFAULT_OPTIONS)
+    instances[0].onerror?.({ message: '' })
+    await expect(p).rejects.toThrow(/reload/)
+  })
+})

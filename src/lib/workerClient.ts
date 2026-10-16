@@ -10,13 +10,27 @@ export class VectorizerClient {
   private worker: Worker
   private jobId = 0
   private pending: { reject: (e: Error) => void } | null = null
+  // Set when the worker reports an error. Watched from the start: a worker whose script fails to
+  // load (a 404 after a redeploy, a flaky network) fires its one error before any job is posted,
+  // and every later job would wait forever.
+  private failed: Error | null = null
 
   constructor() {
     this.worker = this.spawn()
   }
 
   private spawn(): Worker {
-    return new Worker(new URL('../worker/vectorize.worker.ts', import.meta.url), { type: 'module' })
+    const w = new Worker(new URL('../worker/vectorize.worker.ts', import.meta.url), {
+      type: 'module',
+    })
+    this.failed = null
+    // A load failure is a plain Event with no message.
+    w.onerror = (e) => {
+      this.failed = new Error(e.message || 'The vectorizer stopped working — reload the page.')
+      this.pending?.reject(this.failed)
+      this.pending = null
+    }
+    return w
   }
 
   vectorize(
@@ -27,6 +41,7 @@ export class VectorizerClient {
     paletteImage?: RasterImage,
   ): Promise<ClientResult> {
     this.pending?.reject(new Error('cancelled')) // a new call supersedes any unsettled job
+    if (this.failed) return Promise.reject(this.failed)
     const jobId = ++this.jobId
     return new Promise<ClientResult>((resolve, reject) => {
       this.pending = { reject }
@@ -41,10 +56,6 @@ export class VectorizerClient {
           this.pending = null
           reject(new Error(`${m.stage}: ${m.message}`))
         }
-      }
-      this.worker.onerror = (e) => {
-        this.pending = null
-        reject(new Error(e.message))
       }
       this.worker.postMessage({
         type: 'vectorize',
