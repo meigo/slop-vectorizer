@@ -332,3 +332,22 @@ describe('circle list cap', () => {
     )
   })
 })
+
+describe('entries the unzip admits', () => {
+  it('inflates only the first source entry, so extra ones cost nothing', async () => {
+    const json = strToU8(
+      JSON.stringify({ app: 'slop-vectorizer', version: 2, sourceName: 'x.png' }),
+    )
+    const zip = zipSync({
+      'project.json': json,
+      'source.png': [bytes, { level: 0 }],
+      'source.zzz': [new Uint8Array(1000), { level: 9 }],
+    })
+    // corrupt the extra entry's deflate stream (block type 3 is invalid): inflating it throws
+    const name = strToU8('source.zzz')
+    const at = zip.findIndex((_, i) => name.every((b, k) => zip[i + k] === b))
+    zip.fill(0xff, at + name.length, at + name.length + 4)
+    const back = await unpackProject(new Blob([zip]))
+    expect(new Uint8Array(await back.source.arrayBuffer())).toEqual(bytes)
+  })
+})

@@ -174,11 +174,18 @@ export const nameFromProjectFile = (fileName: string) =>
  *  before names existed. */
 export async function unpackProject(zip: Blob, fileName = ''): Promise<ProjectData> {
   let entries: Record<string, Uint8Array>
+  // At most one of each: a crafted zip with many source.* (or project.json) entries would
+  // otherwise inflate all of them, each up to MAX_ENTRY_SIZE, before one is picked.
+  let haveJson = false,
+    haveSource = false
   try {
     entries = unzipSync(new Uint8Array(await zip.arrayBuffer()), {
-      filter: (f) =>
-        (f.name === 'project.json' || f.name.startsWith('source.')) &&
-        f.originalSize <= MAX_ENTRY_SIZE,
+      filter: (f) => {
+        if (f.originalSize > MAX_ENTRY_SIZE) return false
+        if (f.name === 'project.json' && !haveJson) return (haveJson = true)
+        if (f.name.startsWith('source.') && !haveSource) return (haveSource = true)
+        return false
+      },
     })
   } catch {
     throw new Error('That file is damaged or not a zip.')
