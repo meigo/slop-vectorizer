@@ -498,9 +498,16 @@
     }
     const ticket = ++loadSeq
     const at = scale
-    let loaded
+    let loaded, source: File
     try {
-      loaded = await decodeForLoad(file, at)
+      // Kept as an in-memory copy: a dropped or picked File stays backed by the file on disk,
+      // and Chromium refuses to read it again once that file changes, which broke every later
+      // autosave, Save project and Scale change.
+      source = new File([await file.arrayBuffer()], file.name, {
+        type: file.type,
+        lastModified: file.lastModified,
+      })
+      loaded = await decodeForLoad(source, at)
     } catch {
       if (ticket === loadSeq) error = UNDECODABLE
       return
@@ -508,13 +515,13 @@
     if (ticket !== loadSeq) return // a newer load took over meanwhile
     // A new image starts with no circles or recolors (they belong to the old image's
     // regions and palette); the scale and other settings carry over.
-    startSession(file, nameFromFile(file.name), loaded.base)
+    startSession(source, nameFromFile(file.name), loaded.base)
     selected = -1
     options.localCircles = []
     options.colorOverrides = null
     lastPalette = null
     // the scale was changed during the decode: decode again at the new one
-    void decodeAndRun(file, scale === at ? loaded.decoded : undefined)
+    void decodeAndRun(source, scale === at ? loaded.decoded : undefined)
   }
 
   // New image picks a file first and only then replaces the session, so cancelling the picker
