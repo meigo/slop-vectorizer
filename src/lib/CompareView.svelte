@@ -38,7 +38,7 @@
   let canvas = $state<HTMLCanvasElement | null>(null)
   // Active touches/pointers by id: one pans, two pinch-zoom.
   const pointers = new Map<number, Point>()
-  let draggingDivider = false
+  let dividerPointer: number | null = null // the one pointer dragging the divider
   const coarse = typeof matchMedia === 'function' && matchMedia('(any-pointer: coarse)').matches
   // A gizmo drag in progress: which pointer, which circle/part it grabbed, and where it started.
   let gz: { id: number; index: number; part: GizmoPart; start: LocalCircle; from: Point } | null =
@@ -73,8 +73,13 @@
     viewport.wheelAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY)
   }
   function down(e: PointerEvent) {
+    // Only the main button: a right-click's pointerup can be swallowed by the context menu,
+    // which left a stale entry that turned plain hover into a pan.
+    if (e.pointerType === 'mouse' && e.button !== 0) return
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    // Captured on the pane, not the target: the target is often a path in the SVG, which the
+    // next result replaces, losing the capture and with it this pointer's pointerup.
+    container.setPointerCapture(e.pointerId)
     const p = panePoint(e)
     const hit =
       pointers.size === 1 && size
@@ -102,7 +107,8 @@
       : null
   }
   function move(e: PointerEvent) {
-    if (draggingDivider) {
+    if (dividerPointer !== null) {
+      if (e.pointerId !== dividerPointer) return // a second finger doesn't move it
       const rect = container.getBoundingClientRect()
       divider = Math.min(98, Math.max(2, ((e.clientX - rect.left) / rect.width) * 100))
       return
@@ -156,7 +162,7 @@
   function up(e: PointerEvent) {
     if (gz?.id === e.pointerId) gz = null
     pointers.delete(e.pointerId)
-    draggingDivider = false
+    if (e.pointerId === dividerPointer) dividerPointer = null
   }
 </script>
 
@@ -169,6 +175,7 @@
   onpointermove={move}
   onpointerup={up}
   onpointercancel={up}
+  onlostpointercapture={up}
   onpointerleave={() => (hoverCursor = null)}
   role="img"
   aria-label="Compare original and vectorized"
@@ -215,11 +222,12 @@
     style:left={`${divider}%`}
     onpointerdown={(e) => {
       e.stopPropagation()
-      draggingDivider = true
+      dividerPointer = e.pointerId
       ;(e.target as Element).setPointerCapture(e.pointerId)
     }}
     onpointermove={move}
     onpointerup={up}
+    onpointercancel={up}
     onkeydown={(e) => {
       if (e.key === 'ArrowLeft') divider = Math.max(2, divider - 2)
       else if (e.key === 'ArrowRight') divider = Math.min(98, divider + 2)

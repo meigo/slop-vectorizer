@@ -74,8 +74,13 @@
     viewport.wheelAt(e.clientX - r.left, e.clientY - r.top, e.deltaY)
   }
   function down(e: PointerEvent) {
+    // Only the main button: a right-click's pointerup can be swallowed by the context menu,
+    // which left a stale entry that turned plain hover into a pan.
+    if (e.pointerType === 'mouse' && e.button !== 0) return
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    ;(e.target as Element).setPointerCapture(e.pointerId)
+    // Captured on the pane, not the target: the target is often a path in the SVG, which the
+    // next result replaces, losing the capture and with it this pointer's pointerup.
+    el.setPointerCapture(e.pointerId)
     const p = panePoint(e)
     const hit =
       pointers.size === 1 && size
@@ -164,6 +169,7 @@
   onpointermove={move}
   onpointerup={up}
   onpointercancel={up}
+  onlostpointercapture={up}
   onpointerleave={() => (hoverCursor = null)}
   role="img"
   aria-label={label}
