@@ -2,8 +2,15 @@ import type { RasterImage } from '../types'
 
 const MAX_SIDE = 4096
 
-/** Working-image scale factors offered by the UI, smallest first. */
-export const SCALES = [1 / 3, 0.5, 1, 2, 3]
+/** Working-image scale factors offered by the UI, smallest first, with their menu labels. */
+export const SCALE_OPTIONS = [
+  { value: 1 / 3, label: '×⅓' },
+  { value: 0.5, label: '×½' },
+  { value: 1, label: '×1' },
+  { value: 2, label: '×2' },
+  { value: 3, label: '×3' },
+]
+export const SCALES = SCALE_OPTIONS.map((o) => o.value)
 
 /**
  * Gap-closing cap in working-image pixels: 3 px at native scale, scaled with the

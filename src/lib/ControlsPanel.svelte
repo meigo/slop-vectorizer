@@ -10,7 +10,7 @@
     Trash2,
   } from '@lucide/svelte'
   import type { LocalCircle, PipelineOptions, PipelineStats } from '../types'
-  import { maxGapClosing } from './decode'
+  import { maxGapClosing, SCALE_OPTIONS } from './decode'
   import { IDENTITY_PRE } from '../worker/pipeline/preprocess'
   import { overrideFill } from '../worker/pipeline/svg'
   import FileMenu from './FileMenu.svelte'
@@ -28,7 +28,7 @@
 
   let {
     options = $bindable(),
-    scale = $bindable(),
+    scale,
     mode = $bindable(),
     showUnmodified = $bindable(),
     hasAdjustments,
@@ -84,7 +84,7 @@
     circles: LocalCircle[]
     selected: number
     onchange: () => void
-    onscale: () => void
+    onscale: (next: number) => void
     onfit: () => void
     onnew: () => void
     onopen: () => void
@@ -276,10 +276,11 @@
            strokes more pixels to survive segmentation. -->
       <label class="select-row">
         <span class="name">Scale</span>
-        <select bind:value={scale} onchange={onscale}>
-          <option value={1 / 3}>×⅓</option><option value={0.5}>×½</option><option value={1}
-            >×1</option
-          ><option value={2}>×2</option><option value={3}>×3</option>
+        <select
+          value={scale}
+          onchange={(e) => onscale(SCALE_OPTIONS[e.currentTarget.selectedIndex].value)}
+        >
+          {#each SCALE_OPTIONS as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
         </select>
       </label>
       {@render slider('Black point', 'blackPoint', 0, 254, 1, 0)}

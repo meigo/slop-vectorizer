@@ -106,7 +106,6 @@
   let options = $state({ ...DEFAULT_OPTIONS, localCircles: [] as LocalCircle[] })
   let debounce: ReturnType<typeof setTimeout> | undefined
   let lastPalette: number[] | null = null
-  let lastScale = 1
   let preserveNextFraming = false
   // Original ×1 decode of the current file: the scale-invariant palette source.
   // Palette estimation always reads this, so swatch colors stay constant across
@@ -301,7 +300,6 @@
     selected = d.options.localCircles.length > 0 ? 0 : -1
     lastPalette = null
     scale = d.scale
-    lastScale = d.scale
     void decodeAndRun(src, loaded.decoded)
     return true
   }
@@ -570,9 +568,9 @@
     if (f) handleFile(f)
   }
 
-  function handleScale() {
-    const factor = scale / lastScale
-    lastScale = scale
+  function handleScale(next: number) {
+    const factor = next / scale
+    scale = next
     // Gap closing is in working-image pixels; rescale it with the image so the
     // PHYSICAL bridge width is preserved (and round-trips: ×1 g=2 → ×2 g=4 → ×1
     // g=2). Clamped anyway: downscaling rounds up as often as down (×1 g=3 → ×½
@@ -668,7 +666,7 @@
     <aside class="panel">
       <ControlsPanel
         bind:options
-        bind:scale
+        {scale}
         bind:mode
         bind:showUnmodified
         hasAdjustments={!!result?.preImage}
