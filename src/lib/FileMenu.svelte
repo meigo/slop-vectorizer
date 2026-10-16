@@ -6,8 +6,6 @@
      click on the trigger is not also "outside" (which would close and instantly reopen). -->
 <script lang="ts">
   let {
-    canNew,
-    canSaveProject,
     projectSavedName,
     projectName,
     onrename,
@@ -18,8 +16,6 @@
     onopen,
     onsaveproject,
   }: {
-    canNew: boolean
-    canSaveProject: boolean
     /** The project file Save project overwrites; null = it will ask where. */
     projectSavedName: string | null
     /** Names the saved project and SVG files; '' = untitled. */
@@ -68,9 +64,7 @@
         />
       </label>
       <div class="sep"></div>
-      <button class="item" role="menuitem" disabled={!canNew} onclick={() => run(onnew)}
-        >New image…</button
-      >
+      <button class="item" role="menuitem" onclick={() => run(onnew)}>New image…</button>
       <button class="item" role="menuitem" onclick={() => run(onpaste)}>Paste image</button>
       <button class="item" role="menuitem" onclick={() => run(onopen)}>
         Open project… <span class="kbd">{mod}O</span>
@@ -79,18 +73,14 @@
       <button
         class="item"
         role="menuitem"
-        disabled={!canSaveProject}
         title={projectSavedName
           ? `Overwrite ${projectSavedName}`
           : 'Save the image and all settings'}
         onclick={() => run(() => onsaveproject(false))}>Save project</button
       >
       {#if canSaveAs && projectSavedName}
-        <button
-          class="item"
-          role="menuitem"
-          disabled={!canSaveProject}
-          onclick={() => run(() => onsaveproject(true))}>Save project as…</button
+        <button class="item" role="menuitem" onclick={() => run(() => onsaveproject(true))}
+          >Save project as…</button
         >
       {/if}
     </div>

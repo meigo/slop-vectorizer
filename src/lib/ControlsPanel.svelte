@@ -175,8 +175,6 @@
   <header class="top">
     <strong>slop-vectorizer</strong>
     <FileMenu
-      canNew={!!svg}
-      canSaveProject={!!svg}
       {projectSavedName}
       {projectName}
       {onrename}
