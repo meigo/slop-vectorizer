@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeFit, pinchStep } from '../src/lib/viewportMath'
+import { computeFit, nextZoom, pinchStep } from '../src/lib/viewportMath'
 
 describe('computeFit', () => {
   it('fits a wide image to container width, vertically centered', () => {
@@ -19,6 +19,24 @@ describe('computeFit', () => {
     expect(f.zoom).toBe(1)
     expect(f.panX).toBeCloseTo(450)
     expect(f.panY).toBeCloseTo(370)
+  })
+  it('never fits to zoom 0 in a pane with no height', () => {
+    expect(computeFit(500, 0, 100, 100).zoom).toBeGreaterThan(0)
+  })
+})
+
+describe('nextZoom', () => {
+  it('clamps to the range', () => {
+    expect(nextZoom(1, 100)).toBe(64)
+    expect(nextZoom(0.2, 0.1)).toBe(0.1)
+  })
+  it('moves a zoom below the range only toward it', () => {
+    expect(nextZoom(0.086, 0.9)).toBe(0.086) // zooming out stays put, not up to 0.1
+    expect(nextZoom(0.05, 1.2)).toBeCloseTo(0.06) // zooming in works normally
+  })
+  it('moves a zoom above the range only toward it', () => {
+    expect(nextZoom(80, 1.1)).toBe(80)
+    expect(nextZoom(80, 0.5)).toBe(40)
   })
 })
 

@@ -1,4 +1,4 @@
-import { computeFit } from './viewportMath'
+import { computeFit, nextZoom } from './viewportMath'
 
 export class Viewport {
   zoom = $state(1)
@@ -14,7 +14,7 @@ export class Viewport {
   // Multiply zoom by factor, keeping the image point under (cx, cy) fixed.
   zoomAt(cx: number, cy: number, factor: number): void {
     this.touched = true
-    const next = Math.min(64, Math.max(0.1, this.zoom * factor))
+    const next = nextZoom(this.zoom, factor)
     this.panX = cx - (cx - this.panX) * (next / this.zoom)
     this.panY = cy - (cy - this.panY) * (next / this.zoom)
     this.zoom = next

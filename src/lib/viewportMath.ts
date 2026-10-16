@@ -4,8 +4,20 @@ export interface FitResult {
   panY: number
 }
 
+/** The zoom range for wheel and pinch. A fit or a scale change may set a zoom outside it. */
+export const MIN_ZOOM = 0.1
+export const MAX_ZOOM = 64
+
+/** Zoom after multiplying by `factor`, kept in range — but a zoom already outside the range is
+ *  only ever moved toward it, so zooming out from a 0.086 fit never jumps in to 0.1. */
+export function nextZoom(zoom: number, factor: number): number {
+  return Math.min(Math.max(MAX_ZOOM, zoom), Math.max(Math.min(MIN_ZOOM, zoom), zoom * factor))
+}
+
 export function computeFit(cw: number, ch: number, iw: number, ih: number): FitResult {
-  const zoom = Math.min(1, cw / iw, ch / ih)
+  // floored above 0: a pane laid out at zero height would otherwise give zoom 0, and every
+  // later zoom step divides by it
+  const zoom = Math.max(1e-3, Math.min(1, cw / iw, ch / ih))
   return {
     zoom,
     panX: (cw - iw * zoom) / 2,
