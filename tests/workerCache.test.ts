@@ -184,10 +184,13 @@ describe('cached runs match fresh ones', () => {
     { blurRadius: 2, flatten: 0.5, localCircles: [circle] },
     { flatten: 0.5, whitePoint: 200 },
     { flatten: 0.5, whitePoint: 200, colorCount: 4 },
+    { flatten: 0.5, whitePoint: 200, colorCount: 4, colorOverrides: ['#00ff00'] },
+    { flatten: 0.5, colorCount: 4, colorOverrides: ['#00ff00'], smoothness: 0.9 },
+    { flatten: 0.5, colorCount: 4, smoothness: 0.9, stackedShapes: true, despeckleSize: 9 },
     {},
   ]
   for (const s of [1, 2])
-    it(`at ×${s}, through blur, levels, circle and flatten changes`, () => {
+    it(`at ×${s}, through pre, palette, segment, fit and output changes`, () => {
       const cache = newCache()
       const img = art(s),
         src = art(1)

@@ -58,6 +58,8 @@ export interface PipelineCache {
   areas?: number[] // per region: largest loop area (path ordering + background pick)
   outerLoop?: number[] // per region: index of its largest (outer) loop
   corners?: number[][] // per arc: break indices
+  arcCubics?: Cubic[][] // per arc: its fitted curve, for fitError
+  fitError?: number
 }
 /** preBase's output and the settings it was made with. */
 interface Tones {
@@ -205,6 +207,7 @@ export function runPipeline(
     }
     cache.areas = areas
     cache.outerLoop = outerLoop
+    cache.arcCubics = undefined
     cache.corners = stage('corners', () =>
       cache.bounds!.arcs.map((a) => (a.closed ? findCorners(a.points) : findOpenCorners(a.points))),
     )
@@ -216,9 +219,14 @@ export function runPipeline(
     // Each arc is fitted once, in its stored direction; the region that traverses it
     // backwards reuses the same cubics reversed exactly, so a shared boundary is the
     // same curve on both sides by construction.
-    const arcCubics = cache.bounds!.arcs.map((a, i) =>
-      fitArc(a.points, cache.corners![i], a.closed, maxErrorPx),
-    )
+    // Kept across colour picks and output toggles, which change only the assembly.
+    if (!cache.arcCubics || cache.fitError !== maxErrorPx) {
+      cache.arcCubics = cache.bounds!.arcs.map((a, i) =>
+        fitArc(a.points, cache.corners![i], a.closed, maxErrorPx),
+      )
+      cache.fitError = maxErrorPx
+    }
+    const arcCubics = cache.arcCubics
     // Stacked mode keeps only each region's outer loop and relies on the emission
     // order: extractBoundaries yields regions by ascending first pixel, which is a
     // valid containment (painter's) order — if A encloses B, A owns a pixel in a row
