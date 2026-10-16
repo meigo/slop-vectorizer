@@ -3,7 +3,9 @@
  * reads anti-aliasing jitter as corners). Turning angle measured between the
  * chords to vertices ±s away, for s in SCALES; a vertex is a corner candidate
  * if the minimum deviation over scales exceeds ANGLE_THRESHOLD.
- * Non-maximum suppression keeps one vertex per corner neighborhood.
+ * Non-maximum suppression keeps one vertex per corner neighborhood: within the largest scale,
+ * but never past a vertex below the threshold, which ends the neighborhood. A fixed window let
+ * the corners of a stroke 2–8 px wide (or a square under 10 px) suppress each other.
  */
 const SCALES = [2, 4, 8]
 const ANGLE_THRESHOLD = (40 * Math.PI) / 180
@@ -34,14 +36,12 @@ export function findCorners(loop: Float64Array): number[] {
   for (let i = 0; i < n; i++) {
     if (deviation[i] < ANGLE_THRESHOLD) continue
     let isMax = true
-    for (let d = -win; d <= win; d++) {
-      if (d === 0) continue
-      const j = (((i + d) % n) + n) % n
-      if (deviation[j] > deviation[i] || (deviation[j] === deviation[i] && j < i)) {
-        isMax = false
-        break
+    for (const dir of [-1, 1])
+      for (let d = 1; d <= win && isMax; d++) {
+        const j = (((i + dir * d) % n) + n) % n
+        if (deviation[j] < ANGLE_THRESHOLD) break
+        if (deviation[j] > deviation[i] || (deviation[j] === deviation[i] && j < i)) isMax = false
       }
-    }
     if (isMax) corners.push(i)
   }
   return corners
@@ -73,15 +73,12 @@ export function findOpenCorners(loop: Float64Array): number[] {
   for (let i = 1; i < n - 1; i++) {
     if (deviation[i] < ANGLE_THRESHOLD) continue
     let isMax = true
-    for (let d = -win; d <= win; d++) {
-      if (d === 0) continue
-      const j = i + d
-      if (j < 1 || j > n - 2) continue
-      if (deviation[j] > deviation[i] || (deviation[j] === deviation[i] && j < i)) {
-        isMax = false
-        break
+    for (const dir of [-1, 1])
+      for (let d = 1; d <= win && isMax; d++) {
+        const j = i + dir * d
+        if (j < 1 || j > n - 2 || deviation[j] < ANGLE_THRESHOLD) break
+        if (deviation[j] > deviation[i] || (deviation[j] === deviation[i] && j < i)) isMax = false
       }
-    }
     if (isMax) corners.push(i)
   }
   return corners

@@ -22,6 +22,19 @@ describe('findCorners', () => {
     const corners = findCorners(shapeLoop(insideRotSquare(48, 48, 26, 0.3)))
     expect(corners.length).toBe(4)
   })
+  it('finds all 4 corners of thin strokes and small squares', () => {
+    const rect = (x0: number, y0: number, w: number, h: number) => (x: number, y: number) =>
+      x >= x0 && x < x0 + w && y >= y0 && y < y0 + h
+    // (a 2 px stroke has no outline vertex on its true corners: one corner per end)
+    for (const [w, h] of [
+      [3, 30],
+      [4, 30],
+      [6, 30],
+      [8, 8],
+      [9, 9],
+    ])
+      expect(findCorners(shapeLoop(rect(30, 30, w, h))).length, `${w}x${h}`).toBe(4)
+  })
 })
 
 describe('findOpenCorners', () => {
