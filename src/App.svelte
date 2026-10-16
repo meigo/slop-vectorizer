@@ -542,6 +542,29 @@
     imageInput.value = ''
   }
 
+  // The editor's page must never scroll, but iOS shifts it to show a focused text field (File ▸
+  // Name) above the on-screen keyboard and does not always shift it back. Snap it back when focus
+  // leaves a field, when the visual viewport resizes (the keyboard), and on the page's own scroll —
+  // Chrome for iPad scrolls a moment after the other two. As slop-paint and slop-animator do; it
+  // can't undo Chrome for iPad's leftover native shift (../CLAUDE.md). Editor only: the start
+  // screen may legitimately scroll on a short phone screen.
+  $effect(() => {
+    if (!image) return
+    const resetPageScroll = () => {
+      if (window.scrollY !== 0 || (document.scrollingElement?.scrollTop ?? 0) !== 0)
+        window.scrollTo(0, 0)
+    }
+    const onFocusOut = () => requestAnimationFrame(resetPageScroll)
+    document.addEventListener('focusout', onFocusOut)
+    window.visualViewport?.addEventListener('resize', resetPageScroll)
+    window.addEventListener('scroll', resetPageScroll, { passive: true })
+    return () => {
+      document.removeEventListener('focusout', onFocusOut)
+      window.visualViewport?.removeEventListener('resize', resetPageScroll)
+      window.removeEventListener('scroll', resetPageScroll)
+    }
+  })
+
   // Drop and paste work over the editor too (the Dropzone owns them on the start screen). The
   // window must accept every file drag, or a missed drop navigates the tab away from the work.
   let dropping = $state(false)
