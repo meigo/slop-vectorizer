@@ -41,9 +41,12 @@ async function withStore<T>(
   const db = await open()
   try {
     return await new Promise<T>((resolve, reject) => {
-      const req = fn(db.transaction(STORE, mode).objectStore(STORE))
-      req.onsuccess = () => resolve(req.result as T)
-      req.onerror = () => reject(req.error)
+      const tx = db.transaction(STORE, mode)
+      const req = fn(tx.objectStore(STORE))
+      // Settle on the transaction, not the request: a put can succeed and its commit still
+      // abort (QuotaExceededError), and then nothing was stored.
+      tx.oncomplete = () => resolve(req.result as T)
+      tx.onabort = tx.onerror = () => reject(tx.error ?? req.error)
     })
   } finally {
     db.close()
