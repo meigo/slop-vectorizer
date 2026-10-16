@@ -18,16 +18,20 @@ export const IDENTITY_PRE: PreOptions = {
   localCircles: [],
 }
 
-/** The circles that actually affect pixels: visible, and with points that differ from the global
- *  ones (a circle matching them maps every tone to itself, so it is a no-op). Order is kept. */
+/** The circles that actually affect pixels: the visible ones, less any at the global points that
+ *  come before every circle with its own points (blended over the global levels it changes
+ *  nothing). A later one is kept: it is painted over the earlier circles and so overrides them
+ *  with the global levels. Order is kept. */
 export function effectiveCircles(o: {
   blackPoint: number
   whitePoint: number
   localCircles: LocalCircle[]
 }): LocalCircle[] {
-  return o.localCircles.filter(
-    (c) => !c.hidden && (c.blackPoint !== o.blackPoint || c.whitePoint !== o.whitePoint),
+  const visible = o.localCircles.filter((c) => !c.hidden)
+  const first = visible.findIndex(
+    (c) => c.blackPoint !== o.blackPoint || c.whitePoint !== o.whitePoint,
   )
+  return first < 0 ? [] : visible.slice(first)
 }
 
 export function sameCircleList(a: LocalCircle[], b: LocalCircle[]): boolean {

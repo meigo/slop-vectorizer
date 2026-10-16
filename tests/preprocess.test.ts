@@ -400,6 +400,24 @@ describe('local levels', () => {
     expect(effectiveCircles(o)).toEqual([keep])
   })
 
+  it('a circle at the global levels still wins over an earlier circle it overlaps', () => {
+    const img = flat(20, 20, [120, 120, 120])
+    const under = circle({
+      cx: 0.5,
+      cy: 0.5,
+      inner: 0.3,
+      outer: 0.3,
+      blackPoint: 60,
+      whitePoint: 255,
+    })
+    const over = { ...under, blackPoint: 30 } // the global black point
+    const o = { ...IDENTITY_PRE, blackPoint: 30 }
+    const centre = (10 * 20 + 10) * 4
+    const both = preprocess(img, { ...o, localCircles: [under, over] }).data[centre]
+    expect(both).toBe(preprocess(img, o).data[centre]) // the later circle shows its own points
+    expect(effectiveCircles({ ...o, localCircles: [over, under, over] })).toEqual([under, over])
+  })
+
   it('sameCircleList compares by value, in order', () => {
     const a = circle()
     const b = circle({ cx: 0.4 })
