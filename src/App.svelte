@@ -454,6 +454,26 @@
 
   let decodeSeq = 0
 
+  /** Vectorize `img` with the current options and show the result. A job superseded by a newer
+   *  one ('cancelled', or `stale()`) leaves the UI to that one. */
+  async function vectorizeNow(img: RasterImage, paletteImage?: RasterImage, stale = () => false) {
+    try {
+      result = await client.vectorize(
+        img,
+        $state.snapshot(options),
+        (s) => (stage = s),
+        paletteImage,
+      )
+      stage = null
+      scheduleAutosave()
+    } catch (e) {
+      const msg = errorMessage(e)
+      if (msg === 'cancelled' || stale()) return
+      error = msg
+      stage = null
+    }
+  }
+
   /** `decoded` skips the decode when the caller already has it at the current scale. */
   async function decodeAndRun(file: Blob, decoded?: DecodeResult) {
     const run = ++decodeSeq
@@ -461,27 +481,19 @@
     notice = null
     result = null
     stage = null
+    let img: RasterImage
     try {
-      const { image: img, clamped } = decoded ?? (await fileToRasterImage(file, scale))
+      const d = decoded ?? (await fileToRasterImage(file, scale))
       if (run !== decodeSeq) return // a newer image or scale took over during the decode
-      if (clamped) notice = 'Large image was downscaled to 4096px'
-      image = img
-      if (scale === 1) baseImage = img // ×1 decode = the palette source
-      result = await client.vectorize(
-        img,
-        $state.snapshot(options),
-        (s) => (stage = s),
-        baseImage ?? undefined,
-      )
-      stage = null
-      scheduleAutosave()
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      // superseded by a newer call; let that call own the UI state
-      if (msg === 'cancelled' || run !== decodeSeq) return
-      error = msg === 'undecodable' ? UNDECODABLE : msg
-      stage = null
+      if (d.clamped) notice = 'Large image was downscaled to 4096px'
+      img = d.image
+    } catch {
+      if (run === decodeSeq) error = UNDECODABLE // fileToRasterImage only throws 'undecodable'
+      return
     }
+    image = img
+    if (scale === 1) baseImage = img // ×1 decode = the palette source
+    await vectorizeNow(img, baseImage ?? undefined, () => run !== decodeSeq)
   }
 
   const isProjectFile = (f: File) =>
@@ -584,18 +596,8 @@
   // in-flight promises get rejected with 'cancelled' by vectorize() itself.
   function rerun() {
     clearTimeout(debounce)
-    debounce = setTimeout(async () => {
-      if (!image) return
-      try {
-        result = await client.vectorize(image, $state.snapshot(options), (s) => (stage = s))
-        stage = null
-        scheduleAutosave()
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        if (msg === 'cancelled') return // superseded by a newer call; let that call own the UI state
-        error = msg
-        stage = null
-      }
+    debounce = setTimeout(() => {
+      if (image) void vectorizeNow(image)
     }, 150)
   }
 </script>
