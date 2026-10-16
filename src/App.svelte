@@ -33,6 +33,7 @@
     makeThumb,
     putAutosave,
     SaveGeneration,
+    summaryOf,
     type AutosaveSummary,
   } from './lib/autosave'
   import ContinueCard from './lib/ContinueCard.svelte'
@@ -340,13 +341,7 @@
       const rec = { zip, sourceName: d.sourceName, name: d.name, thumb, savedAt: Date.now() }
       const ok = await putAutosave(rec)
       // keep the card in sync with the slot — but only once something was actually stored
-      if (ok && autosaveGen.isCurrent(gen))
-        resumable = {
-          sourceName: rec.sourceName,
-          name: rec.name,
-          thumb: rec.thumb,
-          savedAt: rec.savedAt,
-        }
+      if (ok && autosaveGen.isCurrent(gen)) resumable = summaryOf(rec)
     } catch {
       // Autosave is best-effort; a failure must never interrupt the session.
     }
@@ -366,15 +361,7 @@
   }
 
   $effect(() => {
-    void getAutosave().then(
-      (rec) =>
-        (resumable = rec && {
-          sourceName: rec.sourceName,
-          name: rec.name,
-          thumb: rec.thumb,
-          savedAt: rec.savedAt,
-        }),
-    )
+    void getAutosave().then((rec) => (resumable = rec && summaryOf(rec)))
   })
 
   const stats = $derived(result?.stats ?? null)

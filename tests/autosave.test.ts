@@ -9,7 +9,6 @@ describe('SaveGeneration', () => {
     const second = g.bump()
     expect(g.isCurrent(first)).toBe(false)
     expect(g.isCurrent(second)).toBe(true)
-    expect(g.current()).toBe(second)
   })
 })
 

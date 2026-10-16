@@ -18,11 +18,10 @@ export interface AutosaveRecord {
 
 /** What the Continue card needs — never the zip bytes, so they aren't pinned in memory for
  *  the whole tab session just to render a start-screen card. */
-export interface AutosaveSummary {
-  sourceName: string
-  name?: string
-  thumb: Blob | null
-  savedAt: number
+export type AutosaveSummary = Omit<AutosaveRecord, 'zip'>
+
+export function summaryOf({ sourceName, name, thumb, savedAt }: AutosaveRecord): AutosaveSummary {
+  return { sourceName, name, thumb, savedAt }
 }
 
 function open(): Promise<IDBDatabase> {
@@ -77,9 +76,6 @@ export class SaveGeneration {
   private n = 0
   bump(): number {
     return ++this.n
-  }
-  current(): number {
-    return this.n
   }
   isCurrent(n: number): boolean {
     return n === this.n
