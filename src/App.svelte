@@ -76,6 +76,8 @@
     setCircles(next)
   }
   function updateCircle(i: number, c: LocalCircle) {
+    // a drag that began on the previous image can outlive it: its circle is gone
+    if (i >= options.localCircles.length) return
     const next = $state.snapshot(options.localCircles)
     next[i] = c
     setCircles(next)
