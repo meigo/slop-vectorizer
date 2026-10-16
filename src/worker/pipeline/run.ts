@@ -13,6 +13,7 @@ import {
   isIdentityPre,
   globalPre,
   palettePre,
+  preBase,
   sameCircleList,
   sameGlobalPre,
   effectiveCircles,
@@ -48,6 +49,9 @@ export interface PipelineCache {
   palImage?: RasterImage // scale-invariant palette source (original ×1 decode)
   palPre?: RasterImage // palette source with current pre-effects applied
   palBlur?: number // the blur radius palPre was made with, in the source's pixels
+  palIsWorking?: boolean // the palette source has the working image's pixels (×1)
+  workTones?: Tones // the working image's flattened + blurred tones
+  palTones?: Tones // the palette source's
   palette?: Palette
   seg?: Segmentation
   bounds?: Boundaries
@@ -55,6 +59,21 @@ export interface PipelineCache {
   outerLoop?: number[] // per region: index of its largest (outer) loop
   corners?: number[][] // per arc: break indices
 }
+/** preBase's output and the settings it was made with. */
+interface Tones {
+  flatten: number
+  blur: number
+  tones: Float32Array
+}
+
+/** The tones for these settings: the kept ones while flatten and blur are unchanged. Kept only
+ *  while one of them is on; without either they are a plain copy, not worth the memory. */
+function tonesFor(kept: Tones | undefined, image: RasterImage, flatten: number, blur: number) {
+  if (flatten === 0 && blur === 0) return undefined
+  if (kept && kept.flatten === flatten && kept.blur === blur) return kept
+  return { flatten, blur, tones: preBase(image, flatten, blur) }
+}
+
 /** An empty cache: a run over it is the whole, uncached pipeline. */
 export const newCache = (): PipelineCache => ({ image: null, options: null })
 
@@ -87,7 +106,13 @@ export function runPipeline(
   if (palSrcChanged) {
     cache.palImage = paletteImage
     cache.palPre = undefined
+    cache.palTones = undefined
   }
+  if (!sameImg) cache.workTones = undefined
+  // At ×1 the palette source is the working image's own decode: its pre-effects are the
+  // working image's, already computed (without circles), so they aren't made twice.
+  if (palSrcChanged || !sameImg)
+    cache.palIsWorking = !!cache.palImage && sameImageData(cache.palImage, image)
   const timings: PipelineStats['timings'] = {}
   const stage = <T>(name: StageName, fn: () => T): T => {
     onProgress?.(name)
@@ -129,22 +154,33 @@ export function runPipeline(
   // A new palette always re-segments, even of the same working image.
   const fromIdx = Math.min(ORDER.indexOf(from), paletteDirty ? ORDER.indexOf('palette') : Infinity)
   if (fromIdx <= ORDER.indexOf('pre') || !cache.pre)
-    cache.pre = identity ? image : stage('pre', () => preprocess(image, preOpts))
+    cache.pre = identity
+      ? image
+      : stage('pre', () => {
+          cache.workTones = tonesFor(cache.workTones, image, options.flatten, options.blurRadius)
+          return preprocess(image, preOpts, cache.workTones?.tones)
+        })
   const src = cache.pre
+  const noCircles = effectiveCircles(options).length === 0
   if (paletteDirty)
     cache.palette = stage('palette', () => {
       if (srcOpts) cache.palBlur = srcOpts.blurRadius
-      const palInput = palBase
-        ? isIdentityPre(srcOpts!)
-          ? palBase
-          : (cache.palPre ??= preprocess(palBase, srcOpts!))
-        : // No distinct palette source: fall back to the working image, but still strip the
-          // circles when any are set — the palette never sees local levels.
-          effectiveCircles(options).length > 0
-          ? palIdentity
-            ? image
-            : preprocess(image, palOpts)
-          : src
+      const fromSource = () => {
+        cache.palTones = tonesFor(cache.palTones, palBase!, srcOpts!.flatten, srcOpts!.blurRadius)
+        return preprocess(palBase!, srcOpts!, cache.palTones?.tones)
+      }
+      const palInput =
+        palBase && !(cache.palIsWorking && noCircles)
+          ? isIdentityPre(srcOpts!)
+            ? palBase
+            : (cache.palPre ??= fromSource())
+          : // No distinct palette source (or it is the working image): use the working image,
+            // but still strip the circles when any are set — the palette never sees local levels.
+            noCircles
+            ? src
+            : palIdentity
+              ? image
+              : preprocess(image, palOpts, cache.workTones?.tones)
       return estimatePalette(palInput, options.colorCount)
     })
   if (fromIdx <= ORDER.indexOf('segment') || !cache.seg)

@@ -146,3 +146,57 @@ describe('palette source at another scale', () => {
     expect(fills(result.svg).length).toBeGreaterThan(0)
   })
 })
+
+describe('cached runs match fresh ones', () => {
+  // a red disc and a blue bar on grey, with a lighting gradient for flatten to remove
+  const art = (s: number): RasterImage => {
+    const w = 60 * s
+    const data = new Uint8ClampedArray(w * w * 4)
+    for (let p = 0; p < w * w; p++) {
+      const x = (p % w) / s,
+        y = Math.floor(p / w) / s
+      const lit = 0.8 + 0.2 * (x / 60)
+      const c =
+        (x - 20) ** 2 + (y - 20) ** 2 < 100
+          ? [200, 40, 40]
+          : y > 40 && y < 46
+            ? [40, 40, 200]
+            : [200, 200, 200]
+      data.set([...c.map((v) => v * lit), 255], p * 4)
+    }
+    return { width: w, height: w, data }
+  }
+  const circle = {
+    cx: 0.3,
+    cy: 0.3,
+    inner: 0.1,
+    outer: 0.2,
+    blackPoint: 60,
+    whitePoint: 220,
+    hidden: false,
+  }
+  const steps: Partial<typeof DEFAULT_OPTIONS>[] = [
+    {},
+    { blurRadius: 2 },
+    { blurRadius: 2, blackPoint: 30 },
+    { blurRadius: 2, blackPoint: 30, saturation: 1.5 },
+    { blurRadius: 2, blackPoint: 30, saturation: 1.5, localCircles: [circle] },
+    { blurRadius: 2, flatten: 0.5, localCircles: [circle] },
+    { flatten: 0.5, whitePoint: 200 },
+    { flatten: 0.5, whitePoint: 200, colorCount: 4 },
+    {},
+  ]
+  for (const s of [1, 2])
+    it(`at ×${s}, through blur, levels, circle and flatten changes`, () => {
+      const cache = newCache()
+      const img = art(s),
+        src = art(1)
+      for (const step of steps) {
+        const o = { ...DEFAULT_OPTIONS, ...step }
+        const cached = runPipeline(cache, img, o, undefined, src)
+        const fresh = runPipeline(newCache(), img, o, undefined, src)
+        expect(cached.result.svg, JSON.stringify(step)).toBe(fresh.result.svg)
+        expect(cached.palette).toEqual(fresh.palette)
+      }
+    })
+})

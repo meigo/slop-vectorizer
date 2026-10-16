@@ -339,21 +339,39 @@ function boxesForGauss(sigma: number, n: number): number[] {
   return widths
 }
 
-export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
-  if (isIdentityPre(opts)) return image
+/**
+ * The tones preprocess levels from: the image's RGB as floats, flattened and blurred (3 floats a
+ * pixel). They depend only on the image, `flatten` and `blurRadius`, so the worker keeps them
+ * while levels, saturation or circles change: at 4096² the blur alone takes about 2 s.
+ */
+export function preBase(image: RasterImage, flatten: number, blurRadius: number): Float32Array {
   const { width: w, height: h } = image
   const data = new Float32Array(w * h * 4)
   for (let i = 0; i < image.data.length; i++) data[i] = image.data[i]
   let working: Float32Array = data
   // Before blur and levels: those read the corrected tones, and the fit wants the
   // raw grain rather than a blurred version of it.
-  if (opts.flatten > 0) flattenIllumination(working, w, h, opts.flatten)
-  if (opts.blurRadius > 0) {
-    for (const width of boxesForGauss(opts.blurRadius, 3)) {
+  if (flatten > 0) flattenIllumination(working, w, h, flatten)
+  if (blurRadius > 0) {
+    for (const width of boxesForGauss(blurRadius, 3)) {
       const r = (width - 1) / 2
       if (r > 0) working = boxBlurPass(working, w, h, r)
     }
   }
+  const rgb = new Float32Array(w * h * 3)
+  for (let p = 0, q = 0; q < rgb.length; p += 4, q += 3) {
+    rgb[q] = working[p]
+    rgb[q + 1] = working[p + 1]
+    rgb[q + 2] = working[p + 2]
+  }
+  return rgb
+}
+
+/** `base` is preBase(image, opts.flatten, opts.blurRadius) when the caller kept it. */
+export function preprocess(image: RasterImage, opts: PreOptions, base?: Float32Array): RasterImage {
+  if (isIdentityPre(opts)) return image
+  const { width: w, height: h } = image
+  const working = base ?? preBase(image, opts.flatten, opts.blurRadius)
   const black = opts.blackPoint
   const white = Math.max(opts.whitePoint, black + 1)
   const scale = 255 / (white - black)
@@ -376,7 +394,7 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
       scale: 255 / (Math.max(c.whitePoint, cBlack + 1) - cBlack),
     }
   })
-  const out = new Uint8ClampedArray(working.length)
+  const out = new Uint8ClampedArray(w * h * 4)
   // Reused across rows rather than allocated per row: on a 4096x4096 image, allocating `dys`
   // (and its `.map` closure) inside the row loop cost ~23ms at 0 circles alone (65ms vs 42ms
   // without it), and testing every circle against every row (no cull) cost 292ms vs 82ms at
@@ -399,9 +417,10 @@ export function preprocess(image: RasterImage, opts: PreOptions): RasterImage {
       }
     }
     for (let x = 0; x < w; x++, p += 4) {
-      let r = working[p],
-        g = working[p + 1],
-        b = working[p + 2]
+      const q = (p >> 2) * 3
+      let r = working[q],
+        g = working[q + 1],
+        b = working[q + 2]
       if (sat !== 1) {
         const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
         r = lum + (r - lum) * sat
