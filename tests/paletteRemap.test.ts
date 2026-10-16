@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { remapOverrides } from '../src/lib/paletteRemap'
+import { matchPalettes, permuteOverrides, remapOverrides } from '../src/lib/paletteRemap'
 
 describe('remapOverrides', () => {
   const inkPaper = [30, 30, 30, 245, 245, 245]
@@ -38,5 +38,22 @@ describe('remapOverrides', () => {
 
   it('returns null when no override survives (caller clears)', () => {
     expect(remapOverrides(inkPaper, [0, 0, 0, 90, 90, 90], ['#123456', '#654321'])).toBeNull()
+  })
+})
+
+describe('matchPalettes (same k)', () => {
+  it('follows colours that saturation reordered', () => {
+    // muted red, muted green, white → saturated: green now sorts before red
+    const before = [180, 90, 90, 90, 150, 90, 245, 245, 245]
+    const after = [60, 170, 60, 220, 60, 60, 250, 250, 250]
+    expect(matchPalettes(before, after)).toEqual([1, 0, 2])
+  })
+  it('keeps the order when levels move every colour far', () => {
+    const before = [30, 30, 30, 128, 128, 128, 245, 245, 245]
+    const after = [0, 0, 0, 50, 50, 50, 245, 245, 245]
+    expect(matchPalettes(before, after)).toEqual([0, 1, 2])
+  })
+  it('moves overrides along with their colours', () => {
+    expect(permuteOverrides(['#0000ff', null, null], [1, 0, 2])).toEqual([null, '#0000ff', null])
   })
 })

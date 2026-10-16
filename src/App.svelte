@@ -16,7 +16,7 @@
     type RasterImage,
     type StageName,
   } from './types'
-  import { remapOverrides } from './lib/paletteRemap'
+  import { matchPalettes, permuteOverrides, remapOverrides } from './lib/paletteRemap'
   import { saveToFilesAvailable } from './lib/share'
   import { readClipboardImage } from './lib/clipboard'
   import { commandFor, isTypingTarget } from './lib/shortcuts'
@@ -431,14 +431,21 @@
   $effect(() => {
     const pal = result?.palette
     if (!pal) return
-    // Same k ⇒ keep overrides at their index: the palette is re-estimated from the
-    // same source, and pre-effects (levels/blur/saturation) are monotonic — they
-    // move colors, sometimes far, but never reorder the luminance-sorted palette.
-    // "Override the darkest color" stays meaningful at any levels setting. Only a
-    // k change (color-count switch, auto-k flip) needs nearest-color remapping.
-    if (lastPalette && lastPalette.length !== pal.length && options.colorOverrides) {
-      options.colorOverrides = remapOverrides(lastPalette, pal, options.colorOverrides)
-      rerun()
+    // Same k ⇒ pair old and new entries one-to-one: levels can move every color far,
+    // and saturation can reorder the luminance-sorted palette, so neither the index
+    // nor the nearest color alone follows an override. A k change (color-count
+    // switch, auto-k flip) needs nearest-color remapping.
+    if (lastPalette && options.colorOverrides) {
+      if (lastPalette.length !== pal.length) {
+        options.colorOverrides = remapOverrides(lastPalette, pal, options.colorOverrides)
+        rerun()
+      } else {
+        const map = matchPalettes(lastPalette, pal)
+        if (map.some((j, i) => j !== i)) {
+          options.colorOverrides = permuteOverrides(options.colorOverrides, map)
+          rerun()
+        }
+      }
     }
     lastPalette = pal
   })
@@ -495,10 +502,13 @@
       return
     }
     if (ticket !== loadSeq) return // a newer load took over meanwhile
-    // A new image starts with no circles; the scale and other settings carry over.
+    // A new image starts with no circles or recolors (they belong to the old image's
+    // regions and palette); the scale and other settings carry over.
     startSession(file, nameFromFile(file.name), loaded.base)
     selected = -1
     options.localCircles = []
+    options.colorOverrides = null
+    lastPalette = null
     // the scale was changed during the decode: decode again at the new one
     void decodeAndRun(file, scale === at ? loaded.decoded : undefined)
   }
