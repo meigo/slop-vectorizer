@@ -316,6 +316,13 @@
   // source image isn't pinned in memory for the tab's whole lifetime. resume() reads the
   // bytes back from the slot on demand.
   let resumable = $state<AutosaveSummary | null>(null)
+  // The thumbnail of the image it was made from: option edits don't change it, and making one
+  // draws the whole image (64 MB at 4096²) into a canvas.
+  let thumbCache: { image: RasterImage; thumb: Promise<Blob | null> } | null = null
+  function thumbFor(img: RasterImage) {
+    if (thumbCache?.image !== img) thumbCache = { image: img, thumb: makeThumb(img) }
+    return thumbCache.thumb
+  }
 
   function scheduleAutosave() {
     clearTimeout(autosaveTimer)
@@ -328,7 +335,7 @@
     if (!d || !img) return
     const gen = autosaveGen.bump()
     try {
-      const [zip, thumb] = await Promise.all([packProject(d), makeThumb(img)])
+      const [zip, thumb] = await Promise.all([packProject(d), thumbFor(img)])
       if (!autosaveGen.isCurrent(gen)) return // superseded by a newer write
       const rec = { zip, sourceName: d.sourceName, name: d.name, thumb, savedAt: Date.now() }
       const ok = await putAutosave(rec)
