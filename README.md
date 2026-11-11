@@ -15,7 +15,7 @@ Everything runs in your browser. Images are never uploaded anywhere — the whol
 Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 30% blended between two region colors tells you where the true edge crosses it. The pipeline exploits this:
 
 1. **Pre-effects** — optional levels, illumination flattening, blur and saturation cleanup, applied before analysis; **local levels** circles then blend their own black/white points over chosen areas, so a face and a body can be read differently in one pass
-2. **Palette estimation** — k-means over flat interior pixels, always from the original-scale image (scale-invariant), with auto color count or manual 2–16. With **Keep transparency** it clusters premultiplied RGBA, so a soft alpha edge posterizes into bands of see-through fill (`fill-opacity`); off, transparency is composited onto white
+2. **Palette estimation** — k-means over flat interior pixels, always from the original-scale image (scale-invariant), with auto color count or manual 2–16. With **Keep transparency** it clusters premultiplied RGBA, so a soft alpha edge posterizes into bands of see-through fill (`fill-opacity`), and each colour whose soft edge was too narrow to sample gets the bands it lacks (up to 32 entries in all); off, transparency is composited onto white
 3. **Segmentation** — per-pixel classification, despeckling, and guarded morphological **gap closing** that reconnects dashed thin strokes over textured paper
 4. **Sub-pixel boundary tracing** — region boundaries refined against the original anti-aliasing (`t = fa + fb − 0.5`, exact for any edge slope; ~0.04 px measured error)
 5. **Corner detection + piecewise cubic Bézier fitting** (Schneider), G1-continuous at smooth joints
@@ -38,7 +38,7 @@ Anti-aliased edge pixels aren't noise — they're measurements. A pixel that's 3
 ```bash
 npm install
 npm run dev            # local dev server
-npm run test           # vitest (271 tests, pipeline ground-truth based)
+npm run test           # vitest (272 tests, pipeline ground-truth based)
 npm run check          # svelte-check + typescript (incl. tests)
 npm run lint           # eslint
 npm run format         # prettier

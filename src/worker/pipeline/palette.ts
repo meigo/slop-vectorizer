@@ -279,6 +279,89 @@ function alphaSnaps(samples: Float64Array, assign: Int32Array, k: number): Int32
   return out
 }
 
+/** A band's colour this close (straight RGB) to an ink already carries it. */
+const INK_TOL = 40
+/** Pixels fainter than this have too few bits of colour to say whose edge they are. */
+const MIN_INK_ALPHA = 16
+/** The palette never grows past this, however many inks × bands the image asks for. */
+const MAX_COLORS = 32
+
+/**
+ * Add the bands the quantizer could not see. The palette's translucent entries come from flat
+ * samples, so only a wide soft edge yields them; a narrow one changes alpha too fast per pixel to
+ * be sampled, and its pixels then join the nearest faint band, of whatever colour (premultiplied,
+ * every faint colour is near every other). Each translucent pixel is credited to its band (the
+ * translucent entry nearest in alpha) and its ink (the painted entry nearest in straight colour);
+ * where an ink keeps landing on a band of another colour, the band is added again in that ink.
+ * Needs at least 2% of the counted pixels (and 16) per new entry, so stray blends add nothing.
+ * Returns the straight RGBA palette, grown; unchanged when nothing is translucent.
+ */
+function completeBands(image: RasterImage, straight: Uint8ClampedArray): Uint8ClampedArray {
+  const k = straight.length / 4
+  const bands: number[] = [],
+    inks: number[] = []
+  for (let c = 0; c < k; c++) {
+    const a = straight[4 * c + 3]
+    if (a > 0) inks.push(c)
+    if (a > 0 && a < 255) bands.push(c)
+  }
+  if (bands.length === 0) return straight
+  const rgbDist2 = (r: number, g: number, b: number, c: number) =>
+    (r - straight[4 * c]) ** 2 + (g - straight[4 * c + 1]) ** 2 + (b - straight[4 * c + 2]) ** 2
+  const { data } = image
+  const pairs = new Int32Array(k * k) // ink * k + band → pixels
+  let counted = 0
+  for (let o = 0; o < data.length; o += 4) {
+    const a = data[o + 3]
+    if (a < MIN_INK_ALPHA || a === 255) continue
+    // the band: nearest translucent alpha, unless the pixel is nearer opaque (a solid takes it)
+    let band = -1,
+      bandD = 255 - a
+    for (const c of bands) {
+      const d = Math.abs(a - straight[4 * c + 3])
+      if (d < bandD) [band, bandD] = [c, d]
+    }
+    if (band < 0) continue
+    const f = 255 / a,
+      r = data[o] * f,
+      g = data[o + 1] * f,
+      b = data[o + 2] * f
+    let ink = inks[0],
+      inkD = Infinity
+    for (const c of inks) {
+      const d = rgbDist2(r, g, b, c)
+      if (d < inkD) [ink, inkD] = [c, d]
+    }
+    counted++
+    pairs[ink * k + band]++
+  }
+  const min = Math.max(16, 0.02 * counted)
+  const added: number[][] = []
+  const has = (rgb: number[], a: number) =>
+    [...inks, ...added.map((_, i) => k + i)].some((c) => {
+      const e = c < k ? [...straight.subarray(4 * c, 4 * c + 4)] : added[c - k]
+      return (
+        Math.abs(e[3] - a) <= 4 &&
+        (e[0] - rgb[0]) ** 2 + (e[1] - rgb[1]) ** 2 + (e[2] - rgb[2]) ** 2 <= INK_TOL * INK_TOL
+      )
+    })
+  // most-supported pairs first, so the cap drops the weakest
+  const order = [...pairs.keys()].filter((p) => pairs[p] >= min).sort((p, q) => pairs[q] - pairs[p])
+  for (const p of order) {
+    if (k + added.length >= MAX_COLORS) break
+    const ink = Math.floor(p / k),
+      band = p % k
+    const rgb = [...straight.subarray(4 * ink, 4 * ink + 3)],
+      a = straight[4 * band + 3]
+    if (!has(rgb, a)) added.push([...rgb, a])
+  }
+  if (added.length === 0) return straight
+  const out = new Uint8ClampedArray((k + added.length) * 4)
+  out.set(straight)
+  added.forEach((e, i) => out.set(e, 4 * (k + i)))
+  return out
+}
+
 export function estimatePalette(image: RasterImage, colorCount: number | 'auto'): Palette {
   const base = samplePixels(image, 50000)
   const toPalette = (k: number, fit: ReturnType<typeof fitPalette>): Palette => {
@@ -294,15 +377,17 @@ export function estimatePalette(image: RasterImage, colorCount: number | 'auto')
       for (let d = 0; d < 3; d++) straight[4 * c + d] = centers[4 * c + d] * f
       straight[4 * c + 3] = a
     }
+    const full = completeBands(image, straight)
+    const n = full.length / 4
     // Sort by luminance for stable ordering, on the rounded colours (one colour's bands differ
     // in the last float digits); bands of one colour most opaque first
-    const lum = (c: number) => straight[4 * c] * 3 + straight[4 * c + 1] * 6 + straight[4 * c + 2]
-    const order = [...Array(k).keys()].sort(
-      (a, b) => lum(a) - lum(b) || straight[4 * b + 3] - straight[4 * a + 3],
+    const lum = (c: number) => full[4 * c] * 3 + full[4 * c + 1] * 6 + full[4 * c + 2]
+    const order = [...Array(n).keys()].sort(
+      (a, b) => lum(a) - lum(b) || full[4 * b + 3] - full[4 * a + 3],
     )
-    const colors = new Uint8ClampedArray(k * 4)
-    order.forEach((c, i) => colors.set(straight.subarray(4 * c, 4 * c + 4), i * 4))
-    return { k, colors }
+    const colors = new Uint8ClampedArray(n * 4)
+    order.forEach((c, i) => colors.set(full.subarray(4 * c, 4 * c + 4), i * 4))
+    return { k: n, colors }
   }
   if (colorCount !== 'auto') {
     const k = Math.max(2, Math.min(16, colorCount))

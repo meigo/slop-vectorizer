@@ -20,6 +20,34 @@ function softDisc(soft = 14): RasterImage {
   return { width: w, height: w, data }
 }
 
+/** A red disc with a wide soft edge beside a blue box with a narrow one, blue over red where they
+ *  meet (straight alpha, as an exporter writes it). The narrow edge's alpha changes too fast for
+ *  the quantizer to sample, so the palette's faint bands all come from the red disc. */
+function discAndBox(): RasterImage {
+  const W = 160,
+    H = 120
+  const data = new Uint8ClampedArray(W * H * 4)
+  const ramp = (d: number, soft: number) => Math.min(1, Math.max(0, 1 - d / soft))
+  const R = [220, 40, 40],
+    B = [30, 60, 220]
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const aR = ramp(Math.hypot(x + 0.5 - 60, y + 0.5 - 60) - 28, 10)
+      const qx = Math.max(Math.abs(x + 0.5 - 104) - 28, 0),
+        qy = Math.max(Math.abs(y + 0.5 - 60) - 20, 0)
+      const aB = ramp(Math.hypot(qx, qy), 4)
+      const a = aB + aR * (1 - aB)
+      const o = (y * W + x) * 4
+      if (a === 0) {
+        data.set([0, 255, 0, 0], o)
+        continue
+      }
+      for (let c = 0; c < 3; c++) data[o + c] = (B[c] * aB + R[c] * aR * (1 - aB)) / a
+      data[o + 3] = Math.round(a * 255)
+    }
+  return { width: W, height: H, data }
+}
+
 /** The same image composited onto white by hand, opaque. */
 function onWhite(img: RasterImage): RasterImage {
   const data = new Uint8ClampedArray(img.data.length)
@@ -82,6 +110,36 @@ describe('Keep transparency', () => {
   it('off, a transparent image vectorizes exactly as if composited onto white', () => {
     const img = softDisc()
     expect(vectorize(img, DEFAULT_OPTIONS).svg).toBe(vectorize(onWhite(img), DEFAULT_OPTIONS).svg)
+  })
+  it('a narrow soft edge keeps its own colour, not the faint bands of another shape', () => {
+    const img = discAndBox()
+    const { result, palette } = runPipeline(newCache(), img, keep)
+    const out = fills(result.svg)
+    const B = [30, 60, 220]
+    // the box's faint edge has a band of its own colour...
+    expect(
+      out.some((f) => f.opacity < 1 && near(rgb(f.hex), B, 40)),
+      result.svg,
+    ).toBe(true)
+    // ...and the right edge of the box, far from the disc, is painted with blue only
+    const cols = palette
+    const k = cols.length / 4
+    for (let x = 132; x < 136; x++) {
+      const o = (60 * 160 + x) * 4
+      if (img.data[o + 3] === 0) continue
+      // the palette entry nearest in premultiplied RGBA, as segmentation picks it
+      let best = -1,
+        bestD = Infinity
+      const a = img.data[o + 3] / 255
+      for (let i = 0; i < k; i++) {
+        const f = cols[4 * i + 3] / 255
+        let d = (img.data[o + 3] - cols[4 * i + 3]) ** 2
+        for (let c = 0; c < 3; c++) d += (img.data[o + c] * a - cols[4 * i + c] * f) ** 2
+        if (d < bestD) [best, bestD] = [i, d]
+      }
+      if (cols[4 * best + 3] === 0) continue
+      expect(near([...cols.slice(4 * best, 4 * best + 3)], B, 40), `x=${x}`).toBe(true)
+    }
   })
   it('turns stacked shapes off: translucent bands would paint over each other', () => {
     const svg = vectorize(softDisc(), { ...keep, colorCount: 4, stackedShapes: true }).svg
