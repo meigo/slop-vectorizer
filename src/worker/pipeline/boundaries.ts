@@ -7,6 +7,7 @@ import type {
   ArcRef,
   RegionArcs,
 } from '../../types'
+import { premultipliedPalette } from './alpha'
 
 // Directed boundary edges on the integer lattice, region kept on the LEFT while walking.
 // Vertex ids: v = y * (w+1) + x for lattice point (x, y).
@@ -34,17 +35,19 @@ export function extractBoundaries(
   // dithered scans and was slower than recomputing. Both sides of an edge pass its pixels in
   // the same order and emit() keeps one side's points, so nothing needs the memo.
   const orig = (x: number, y: number, c: number) => image.data[(y * w + x) * 4 + c]
+  // Premultiplied, like the pixels: an edge over transparency mixes linearly only in this space.
+  const pm = premultipliedPalette(palette)
   /** Fraction of pixel (x,y)'s original color explained by palette color ci vs cj. */
   const coverage = (x: number, y: number, ci: number, cj: number): number => {
-    const ax = palette.colors[3 * ci] - palette.colors[3 * cj]
-    const ay = palette.colors[3 * ci + 1] - palette.colors[3 * cj + 1]
-    const az = palette.colors[3 * ci + 2] - palette.colors[3 * cj + 2]
-    const len2 = ax * ax + ay * ay + az * az
+    let dot = 0,
+      len2 = 0
+    for (let d = 0; d < 4; d++) {
+      const a = pm[4 * ci + d] - pm[4 * cj + d]
+      dot += (orig(x, y, d) - pm[4 * cj + d]) * a
+      len2 += a * a
+    }
     if (len2 === 0) return 0.5
-    const dx = orig(x, y, 0) - palette.colors[3 * cj]
-    const dy = orig(x, y, 1) - palette.colors[3 * cj + 1]
-    const dz = orig(x, y, 2) - palette.colors[3 * cj + 2]
-    return Math.max(0, Math.min(1, (dx * ax + dy * ay + dz * az) / len2))
+    return Math.max(0, Math.min(1, dot / len2))
   }
   /**
    * Refined midpoint of the boundary edge between 4-adjacent pixels a=(ax,ay), b=(bx,by).

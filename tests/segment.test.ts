@@ -35,7 +35,7 @@ describe('segmentImage', () => {
       const v = ((p % w) + ((p / w) | 0)) % 2 ? 0 : 255
       data.set([v, v, v, 255], p * 4)
     }
-    const bw = { k: 2, colors: new Uint8ClampedArray([0, 0, 0, 255, 255, 255]) }
+    const bw = { k: 2, colors: new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255]) }
     const seg = segmentImage({ width: w, height: w, data }, bw, 4)
     expect(seg.regionCount).toBeLessThan(w * w)
   }, 60_000)
@@ -82,7 +82,7 @@ function inkRegionCount(img: RasterImage, gapClosing: number): number {
   const pal = estimatePalette(img, 2)
   const seg = segmentImage(img, pal, 4, gapClosing)
   // ink palette index = darker color
-  const lum = (i: number) => pal.colors[3 * i] + pal.colors[3 * i + 1] + pal.colors[3 * i + 2]
+  const lum = (i: number) => pal.colors[4 * i] + pal.colors[4 * i + 1] + pal.colors[4 * i + 2]
   const ink = lum(0) < lum(1) ? 0 : 1
   let count = 0
   for (let r = 0; r < seg.regionCount; r++) if (seg.regionColor[r] === ink) count++
@@ -130,7 +130,7 @@ describe('gap closing', () => {
     // the residue=145 tests above already require the constant to be >= ~1.15 to weld.
     const img = strokesFixture(true, 160)
     const pal = estimatePalette(img, 2)
-    const lum = (i: number) => pal.colors[3 * i] + pal.colors[3 * i + 1] + pal.colors[3 * i + 2]
+    const lum = (i: number) => pal.colors[4 * i] + pal.colors[4 * i + 1] + pal.colors[4 * i + 2]
     expect(Math.min(lum(0), lum(1))).toBeLessThan(100) // palette still resolves ~[30, 245]
     expect(Math.max(lum(0), lum(1))).toBeGreaterThan(700)
     expect(inkRegionCount(img, 2)).toBeGreaterThan(2)

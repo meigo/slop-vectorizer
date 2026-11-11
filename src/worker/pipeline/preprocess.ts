@@ -1,4 +1,5 @@
 import type { LocalCircle, RasterImage } from '../../types'
+import { isOpaque } from './alpha'
 
 export interface PreOptions {
   blackPoint: number
@@ -96,14 +97,21 @@ export function localWeight(d: number, inner: number, outer: number): number {
 
 const clampi = (i: number, n: number) => (i < 0 ? 0 : i >= n ? n - 1 : i)
 
-/** One 2-D box pass (horizontal then vertical sliding window), RGB channels, edge-clamped. */
-function boxBlurPass(src: Float32Array, w: number, h: number, r: number): Float32Array {
+/** One 2-D box pass (horizontal then vertical sliding window), the first `channels` channels
+ *  (RGB, or premultiplied RGBA), edge-clamped. */
+function boxBlurPass(
+  src: Float32Array,
+  w: number,
+  h: number,
+  r: number,
+  channels: number,
+): Float32Array {
   const tmp = new Float32Array(new ArrayBuffer(src.length * 4))
   const out = new Float32Array(new ArrayBuffer(src.length * 4))
   const norm = 1 / (2 * r + 1)
   for (let y = 0; y < h; y++) {
     const row = y * w
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < channels; c++) {
       let sum = 0
       for (let x = -r; x <= r; x++) sum += src[(row + clampi(x, w)) * 4 + c]
       for (let x = 0; x < w; x++) {
@@ -113,7 +121,7 @@ function boxBlurPass(src: Float32Array, w: number, h: number, r: number): Float3
     }
   }
   for (let x = 0; x < w; x++) {
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < channels; c++) {
       let sum = 0
       for (let y = -r; y <= r; y++) sum += tmp[(clampi(y, h) * w + x) * 4 + c]
       for (let y = 0; y < h; y++) {
@@ -339,13 +347,22 @@ function boxesForGauss(sigma: number, n: number): number[] {
   return widths
 }
 
+/** preBase's output: RGB (3 floats a pixel), and alpha (1 a pixel) when the image has any. */
+export interface PreTones {
+  rgb: Float32Array
+  alpha: Float32Array | null
+}
+
 /**
- * The tones preprocess levels from: the image's RGB as floats, flattened and blurred (3 floats a
- * pixel). They depend only on the image, `flatten` and `blurRadius`, so the worker keeps them
- * while levels, saturation or circles change: at 4096² the blur alone takes about 2 s.
+ * The tones preprocess levels from: the image's RGB as floats, flattened and blurred. They depend
+ * only on the image, `flatten` and `blurRadius`, so the worker keeps them while levels, saturation
+ * or circles change: at 4096² the blur alone takes about 2 s. A transparent image's pixels are
+ * premultiplied (alpha.ts), so its RGB and alpha blur together and no colour bleeds in from
+ * transparent pixels; flatten only scales RGB, which is the same premultiplied or not.
  */
-export function preBase(image: RasterImage, flatten: number, blurRadius: number): Float32Array {
+export function preBase(image: RasterImage, flatten: number, blurRadius: number): PreTones {
   const { width: w, height: h } = image
+  const hasAlpha = !isOpaque(image)
   const data = new Float32Array(w * h * 4)
   for (let i = 0; i < image.data.length; i++) data[i] = image.data[i]
   let working: Float32Array = data
@@ -355,7 +372,7 @@ export function preBase(image: RasterImage, flatten: number, blurRadius: number)
   if (blurRadius > 0) {
     for (const width of boxesForGauss(blurRadius, 3)) {
       const r = (width - 1) / 2
-      if (r > 0) working = boxBlurPass(working, w, h, r)
+      if (r > 0) working = boxBlurPass(working, w, h, r, hasAlpha ? 4 : 3)
     }
   }
   const rgb = new Float32Array(w * h * 3)
@@ -364,14 +381,17 @@ export function preBase(image: RasterImage, flatten: number, blurRadius: number)
     rgb[q + 1] = working[p + 1]
     rgb[q + 2] = working[p + 2]
   }
-  return rgb
+  if (!hasAlpha) return { rgb, alpha: null }
+  const alpha = new Float32Array(w * h)
+  for (let i = 0; i < alpha.length; i++) alpha[i] = working[4 * i + 3]
+  return { rgb, alpha }
 }
 
 /** `base` is preBase(image, opts.flatten, opts.blurRadius) when the caller kept it. */
-export function preprocess(image: RasterImage, opts: PreOptions, base?: Float32Array): RasterImage {
+export function preprocess(image: RasterImage, opts: PreOptions, base?: PreTones): RasterImage {
   if (isIdentityPre(opts)) return image
   const { width: w, height: h } = image
-  const working = base ?? preBase(image, opts.flatten, opts.blurRadius)
+  const { rgb: working, alpha } = base ?? preBase(image, opts.flatten, opts.blurRadius)
   const black = opts.blackPoint
   const white = Math.max(opts.whitePoint, black + 1)
   const scale = 255 / (white - black)
@@ -421,6 +441,14 @@ export function preprocess(image: RasterImage, opts: PreOptions, base?: Float32A
       let r = working[q],
         g = working[q + 1],
         b = working[q + 2]
+      // Premultiplied: levels and saturation act on the straight colour, then alpha goes back on.
+      const a = alpha ? Math.min(255, alpha[p >> 2]) : 255
+      if (a < 255) {
+        if (a <= 0) continue // out is already (0,0,0,0)
+        r *= 255 / a
+        g *= 255 / a
+        b *= 255 / a
+      }
       if (sat !== 1) {
         const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
         r = lum + (r - lum) * sat
@@ -445,6 +473,14 @@ export function preprocess(image: RasterImage, opts: PreOptions, base?: Float32A
         orr = gr + (lev(r, c.black, c.scale) - gr) * wt
         og = gg + (lev(g, c.black, c.scale) - gg) * wt
         ob = gb + (lev(b, c.black, c.scale) - gb) * wt
+      }
+      if (a < 255) {
+        const f = a / 255
+        out[p] = Math.min(255, Math.max(0, orr)) * f
+        out[p + 1] = Math.min(255, Math.max(0, og)) * f
+        out[p + 2] = Math.min(255, Math.max(0, ob)) * f
+        out[p + 3] = a
+        continue
       }
       out[p] = orr // Uint8ClampedArray clamps + rounds
       out[p + 1] = og

@@ -100,7 +100,7 @@
   } = $props()
 
   function setOverride(i: number, hexColor: string) {
-    const k = (palette?.length ?? 0) / 3
+    const k = (palette?.length ?? 0) / 4
     const arr = options.colorOverrides
       ? [...options.colorOverrides]
       : Array<string | null>(k).fill(null)
@@ -112,6 +112,9 @@
     options.colorOverrides = null
     onchange()
   }
+
+  // Stacked shapes as the pipeline applies them: Keep transparency turns them off (run.ts).
+  const stacked = $derived(options.stackedShapes && !options.keepAlpha)
 
   const totalMs = (s: PipelineStats) =>
     Object.values(s.timings)
@@ -238,22 +241,30 @@
           {/each}
         </select>
       </label>
-      {#if palette && palette.length >= 3}
+      {#if palette && palette.length >= 4}
         <div class="swatches">
-          {#each { length: palette.length / 3 } as _, i}
+          {#each { length: palette.length / 4 } as _, i}
             {@const effective = overrideFill(options.colorOverrides?.[i], palette, i)}
-            <label
-              class="swatch"
-              class:overridden={!!options.colorOverrides?.[i]}
-              title={effective}
-              style:background={effective}
-            >
-              <input
-                type="color"
-                value={effective}
-                oninput={(e) => setOverride(i, (e.target as HTMLInputElement).value)}
-              />
-            </label>
+            {@const alpha = palette[4 * i + 3]}
+            <!-- A fully transparent entry is drawn as nothing, so there is no colour to pick. -->
+            {#if alpha > 0}
+              <label
+                class="swatch"
+                class:translucent={alpha < 255}
+                class:overridden={!!options.colorOverrides?.[i]}
+                title={alpha < 255
+                  ? `${effective} · ${Math.round((alpha / 255) * 100)}%`
+                  : effective}
+                style:--swatch={effective +
+                  (alpha < 255 ? alpha.toString(16).padStart(2, '0') : '')}
+              >
+                <input
+                  type="color"
+                  value={effective}
+                  oninput={(e) => setOverride(i, (e.target as HTMLInputElement).value)}
+                />
+              </label>
+            {/if}
           {/each}
           {#if options.colorOverrides?.some(Boolean)}
             <button class="link" onclick={clearOverrides}>Reset colors</button>
@@ -363,29 +374,42 @@
           onchange()
         }}>Optimize</button
       >
+      <!-- Translucent fills can't stack (a band painted over the solid shape beneath it shows
+           both), so Keep transparency turns stacked shapes off while it is on. -->
       <button
-        class:ui-on={options.stackedShapes}
+        class:ui-on={options.keepAlpha}
+        aria-pressed={options.keepAlpha}
+        title="Trace the image's transparency into see-through fills"
+        onclick={() => {
+          options.keepAlpha = !options.keepAlpha
+          onchange()
+        }}>Keep transparency</button
+      >
+      <button
+        class:ui-on={stacked}
         aria-pressed={options.stackedShapes}
+        disabled={options.keepAlpha}
+        title={options.keepAlpha ? 'Not used with Keep transparency' : undefined}
         onclick={() => {
           options.stackedShapes = !options.stackedShapes
           onchange()
         }}>Stacked shapes</button
       >
       <button
-        class:ui-on={options.mergePaths && !options.stackedShapes}
+        class:ui-on={options.mergePaths && !stacked}
         aria-pressed={options.mergePaths}
-        disabled={options.stackedShapes}
-        title={options.stackedShapes ? 'Not used with stacked shapes' : undefined}
+        disabled={stacked}
+        title={stacked ? 'Not used with stacked shapes' : undefined}
         onclick={() => {
           options.mergePaths = !options.mergePaths
           onchange()
         }}>Merge colors</button
       >
       <button
-        class:ui-on={options.transparentBg && !options.stackedShapes}
+        class:ui-on={options.transparentBg && !stacked}
         aria-pressed={options.transparentBg}
-        disabled={options.stackedShapes}
-        title={options.stackedShapes ? 'Not used with stacked shapes' : undefined}
+        disabled={stacked}
+        title={stacked ? 'Not used with stacked shapes' : undefined}
         onclick={() => {
           options.transparentBg = !options.transparentBg
           onchange()
@@ -548,6 +572,14 @@
     border-radius: 4px;
     cursor: pointer;
     position: relative;
+    background: var(--swatch);
+  }
+  /* A translucent colour over the artwork's checkerboard, as it shows in the SVG. */
+  .swatch.translucent {
+    background:
+      linear-gradient(var(--swatch), var(--swatch)),
+      repeating-conic-gradient(var(--color-check-a) 0 25%, var(--color-check-b) 0 50%) 0 0 / 10px
+        10px;
   }
   /* Out of flow, so marking a swatch never moves its neighbours (guide §5). */
   .swatch.overridden::after {

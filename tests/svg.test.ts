@@ -4,7 +4,10 @@ import type { Palette } from '../src/types'
 import type { Cubic } from '../src/worker/pipeline/fitcurves'
 
 describe('svg assembly', () => {
-  const palette: Palette = { k: 2, colors: new Uint8ClampedArray([245, 245, 245, 200, 30, 30]) }
+  const palette: Palette = {
+    k: 2,
+    colors: new Uint8ClampedArray([245, 245, 245, 255, 200, 30, 30, 255]),
+  }
   const square: RegionPath = {
     paletteIndex: 1,
     area: 100,
@@ -184,7 +187,7 @@ describe('svg assembly', () => {
 })
 
 describe('assembleSvg stacked mode', () => {
-  const palette = { k: 2, colors: new Uint8ClampedArray([255, 255, 255, 0, 0, 0]) }
+  const palette = { k: 2, colors: new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 255]) }
   // one square loop as a Cubic[] (degenerate cubics along straight edges)
   const square = (x0: number, y0: number, s: number): Cubic[] => {
     const pts = [

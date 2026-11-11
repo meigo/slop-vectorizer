@@ -80,17 +80,14 @@ export async function fileToRasterImage(file: Blob, scale: number = 1): Promise<
   let src: ImageBitmap | OffscreenCanvas = bmp
   let canvas!: OffscreenCanvas
   let ctx!: OffscreenCanvasRenderingContext2D
-  for (const [i, step] of resampleSteps(bmp.width, bmp.height, w, h).entries()) {
+  // Transparency is kept: the pipeline either traces it or composites onto white itself
+  // (worker/pipeline/alpha.ts), so the Keep transparency toggle needs no re-decode. Canvas
+  // resamples premultiplied, so the steps don't bleed colour in from transparent pixels.
+  for (const step of resampleSteps(bmp.width, bmp.height, w, h)) {
     canvas = new OffscreenCanvas(step.w, step.h)
     ctx = canvas.getContext('2d')!
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
-    // Composite transparency onto white on the first draw, so every later step
-    // resamples opaque pixels and the result matches a one-shot draw's semantics.
-    if (i === 0) {
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, step.w, step.h)
-    }
     ctx.drawImage(src, 0, 0, step.w, step.h)
     src = canvas
   }

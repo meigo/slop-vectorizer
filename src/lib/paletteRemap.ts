@@ -10,25 +10,30 @@
  *
  * Returns the new index-aligned override array, or null when nothing survives.
  */
-const TOL_SQ = 20 * 20 // Euclidean RGB tolerance, matches perceptual "same color, re-estimated"
+const TOL_SQ = 20 * 20 // Euclidean RGBA tolerance, matches perceptual "same color, re-estimated"
+
+/** Squared distance between entry i of `a` and entry j of `b` (straight RGBA, 4 per entry). Alpha
+ *  counts: the bands of one blurred colour share their RGB and differ only in it. */
+function distSq(a: number[], i: number, b: number[], j: number): number {
+  let s = 0
+  for (let d = 0; d < 4; d++) s += (a[4 * i + d] - b[4 * j + d]) ** 2
+  return s
+}
 
 export function remapOverrides(
   oldPalette: number[],
   newPalette: number[],
   overrides: (string | null)[],
 ): (string | null)[] | null {
-  const kNew = newPalette.length / 3
+  const kNew = newPalette.length / 4
   const best = new Map<number, { distSq: number; hex: string }>()
   for (let i = 0; i < overrides.length; i++) {
     const hex = overrides[i]
-    if (!hex || 3 * i + 2 >= oldPalette.length) continue
+    if (!hex || 4 * i + 3 >= oldPalette.length) continue
     let bestJ = -1
     let bestD = Infinity
     for (let j = 0; j < kNew; j++) {
-      const dr = oldPalette[3 * i] - newPalette[3 * j]
-      const dg = oldPalette[3 * i + 1] - newPalette[3 * j + 1]
-      const db = oldPalette[3 * i + 2] - newPalette[3 * j + 2]
-      const d = dr * dr + dg * dg + db * db
+      const d = distSq(oldPalette, i, newPalette, j)
       if (d < bestD) {
         bestD = d
         bestJ = j
@@ -51,13 +56,8 @@ export function remapOverrides(
  * the sort), so neither "same index" nor "nearest colour" alone follows them.
  */
 export function matchPalettes(oldPalette: number[], newPalette: number[]): number[] {
-  const n = oldPalette.length / 3
-  const cost = (i: number, j: number) =>
-    Math.hypot(
-      oldPalette[3 * i] - newPalette[3 * j],
-      oldPalette[3 * i + 1] - newPalette[3 * j + 1],
-      oldPalette[3 * i + 2] - newPalette[3 * j + 2],
-    )
+  const n = oldPalette.length / 4
+  const cost = (i: number, j: number) => Math.sqrt(distSq(oldPalette, i, newPalette, j))
   // 1-based potentials u (rows), v (columns); p[j] = row matched to column j
   const u = new Float64Array(n + 1),
     v = new Float64Array(n + 1)

@@ -40,12 +40,12 @@ const f = (v: number) => {
 }
 
 const hex = (c: ArrayLike<number>, i: number) =>
-  '#' + [c[3 * i], c[3 * i + 1], c[3 * i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')
+  '#' + [c[4 * i], c[4 * i + 1], c[4 * i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
 
 /** The colour palette entry i is drawn in: its override when that is a clean `#rrggbb`, else its
- *  detected colour (`colors` is RGB triples). The swatches show the same thing. colorOverrides
+ *  detected colour (`colors` is straight RGBA, 4 per entry; an override keeps the alpha). The swatches show the same thing. colorOverrides
  *  can come from a loaded project file (untrusted) and is interpolated unescaped into a
  *  `fill="..."` attribute — never trust it past this point. */
 export const overrideFill = (
@@ -120,19 +120,24 @@ export function assembleSvg(
   height: number,
   opts: SvgOptions,
 ): string {
+  // A fully transparent palette entry is the absence of paint: it gets no path at all. Filtered
+  // as late as possible: Transparent bg must still see it when it picks the background.
+  const alpha = (p: RegionPath) => palette.colors[4 * p.paletteIndex + 3]
+  const painted = (p: RegionPath) => alpha(p) > 0
+  const paint = (p: RegionPath) => {
+    const fill = overrideFill(opts.colorOverrides?.[p.paletteIndex], palette.colors, p.paletteIndex)
+    const a = alpha(p)
+    return a < 255
+      ? `fill="${fill}" fill-opacity="${Math.round((a / 255) * 1000) / 1000}"`
+      : `fill="${fill}"`
+  }
   // Painter's order: stacked paths are emitted in the order given, each one solid and
   // opaque over what precedes it. The caller supplies containment order (see vectorize).
   if (opts.stackedShapes) {
     const toPath = opts.optimize ? loopToPathCompact : loopToPath
     const body = paths
-      .map((p) => {
-        const fill = overrideFill(
-          opts.colorOverrides?.[p.paletteIndex],
-          palette.colors,
-          p.paletteIndex,
-        )
-        return `<path fill="${fill}" d="${p.loops.map(toPath).join('')}"/>`
-      })
+      .filter(painted)
+      .map((p) => `<path ${paint(p)} d="${p.loops.map(toPath).join('')}"/>`)
       .join('\n  ')
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">\n  ${body}\n</svg>\n`
   }
@@ -161,15 +166,9 @@ export function assembleSvg(
   }
   const toPath = opts.optimize ? loopToPathCompact : loopToPath
   const body = items
+    .filter(painted)
     .sort((a, b) => b.area - a.area)
-    .map((p) => {
-      const fill = overrideFill(
-        opts.colorOverrides?.[p.paletteIndex],
-        palette.colors,
-        p.paletteIndex,
-      )
-      return `<path fill="${fill}" fill-rule="evenodd" d="${p.loops.map(toPath).join('')}"/>`
-    })
+    .map((p) => `<path ${paint(p)} fill-rule="evenodd" d="${p.loops.map(toPath).join('')}"/>`)
     .join('\n  ')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">\n  ${body}\n</svg>\n`
 }

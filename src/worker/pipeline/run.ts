@@ -11,6 +11,7 @@ import type {
 import {
   preprocess,
   isIdentityPre,
+  type PreTones,
   globalPre,
   palettePre,
   preBase,
@@ -25,6 +26,7 @@ import { extractBoundaries, loopPointsOf } from './boundaries'
 import { findCorners, findOpenCorners } from './corners'
 import { fitArc, reverseCubics, type Cubic } from './fitcurves'
 import { assembleSvg, maxIndex, polygonArea, type RegionPath } from './svg'
+import { prepareAlpha, unpremultiply } from './alpha'
 
 const ORDER: StageName[] = ['pre', 'palette', 'segment', 'boundaries', 'corners', 'fit', 'svg']
 
@@ -34,6 +36,7 @@ export function firstDirtyStage(
   sameImage: boolean,
 ): StageName {
   if (!prev || !sameImage) return 'pre'
+  if (prev.keepAlpha !== next.keepAlpha) return 'pre'
   if (!sameGlobalPre(prev, next) || !sameCircleList(effectiveCircles(prev), effectiveCircles(next)))
     return 'pre'
   if (prev.colorCount !== next.colorCount) return 'palette'
@@ -45,7 +48,10 @@ export function firstDirtyStage(
 export interface PipelineCache {
   image: RasterImage | null
   options: PipelineOptions | null
+  work?: Prepared // the working image as the pipeline measures it (alpha.ts)
+  palWork?: Prepared // the palette source's
   pre?: RasterImage
+  preShown?: RasterImage // pre as straight RGBA, for display
   palImage?: RasterImage // scale-invariant palette source (original ×1 decode)
   palPre?: RasterImage // palette source with current pre-effects applied
   palBlur?: number // the blur radius palPre was made with, in the source's pixels
@@ -65,7 +71,19 @@ export interface PipelineCache {
 interface Tones {
   flatten: number
   blur: number
-  tones: Float32Array
+  tones: PreTones
+}
+/** prepareAlpha's output and what it was made from. */
+interface Prepared {
+  src: RasterImage
+  keepAlpha: boolean
+  out: RasterImage
+}
+
+/** `src` prepared for the pipeline: the kept copy while the image and the setting are the same. */
+function preparedFor(kept: Prepared | undefined, src: RasterImage, keepAlpha: boolean): Prepared {
+  if (kept && kept.src === src && kept.keepAlpha === keepAlpha) return kept
+  return { src, keepAlpha, out: prepareAlpha(src, keepAlpha) }
 }
 
 /** The tones for these settings: the kept ones while flatten and blur are unchanged. Kept only
@@ -112,6 +130,12 @@ export function runPipeline(
     cache.palTones = undefined
   }
   if (!sameImg) cache.workTones = undefined
+  const keepAlpha = options.keepAlpha
+  // The tones are made from the prepared pixels, which the setting changes.
+  const alphaChanged = !!prev && prev.keepAlpha !== keepAlpha
+  if (alphaChanged) cache.workTones = cache.palTones = undefined
+  // Everything below measures these, not the decoded pixels (alpha.ts).
+  const work = (cache.work = preparedFor(cache.work, image, keepAlpha)).out
   // At ×1 the palette source is the working image's own decode: its pre-effects are the
   // working image's, already computed (without circles), so they aren't made twice.
   if (palSrcChanged || !sameImg)
@@ -136,11 +160,12 @@ export function runPipeline(
   // The palette never sees local circles (spec: palette ignores local levels).
   const palOpts = globalPre(preOpts)
   const palIdentity = isIdentityPre(palOpts)
-  const palBase = cache.palImage
+  const palBase =
+    cache.palImage && (cache.palWork = preparedFor(cache.palWork, cache.palImage, keepAlpha)).out
   // The ×1 source's blur, converted from working-image pixels: it changes with the scale too.
   const srcOpts = palBase && palettePre(preOpts, palBase.width, image.width)
   const srcBlurChanged = !!srcOpts && cache.palBlur !== srcOpts.blurRadius
-  const preFieldsChanged = !prev || !sameGlobalPre(prev, options)
+  const preFieldsChanged = !prev || !sameGlobalPre(prev, options) || alphaChanged
   if (preFieldsChanged || srcBlurChanged) cache.palPre = undefined
   // The palette comes from the scale-invariant source when one is cached, so a
   // working-image change alone (scale re-decode) does NOT re-estimate — swatch
@@ -157,13 +182,15 @@ export function runPipeline(
   // A new palette always re-segments, even of the same working image.
   const fromIdx = Math.min(ORDER.indexOf(from), paletteDirty ? ORDER.indexOf('palette') : Infinity)
   const preRan = fromIdx <= ORDER.indexOf('pre') || !cache.pre
-  if (preRan)
+  if (preRan) {
     cache.pre = identity
-      ? image
+      ? work
       : stage('pre', () => {
-          cache.workTones = tonesFor(cache.workTones, image, options.flatten, options.blurRadius)
-          return preprocess(image, preOpts, cache.workTones?.tones)
+          cache.workTones = tonesFor(cache.workTones, work, options.flatten, options.blurRadius)
+          return preprocess(work, preOpts, cache.workTones?.tones)
         })
+    cache.preShown = keepAlpha ? unpremultiply(cache.pre) : cache.pre
+  }
   const src = cache.pre!
   const noCircles = effectiveCircles(options).length === 0
   if (paletteDirty)
@@ -183,8 +210,8 @@ export function runPipeline(
             noCircles
             ? src
             : palIdentity
-              ? image
-              : preprocess(image, palOpts, cache.workTones?.tones)
+              ? work
+              : preprocess(work, palOpts, cache.workTones?.tones)
       return estimatePalette(palInput, options.colorCount)
     })
   if (fromIdx <= ORDER.indexOf('segment') || !cache.seg)
@@ -216,7 +243,8 @@ export function runPipeline(
   }
   const maxErrorPx = 0.25 + 1.75 * options.smoothness
   let pointCount = 0
-  const stacked = options.stackedShapes
+  // Translucent fills can't stack: a band painted over the solid one beneath it shows both.
+  const stacked = options.stackedShapes && !keepAlpha
   const paths = stage('fit', () => {
     // Each arc is fitted once, in its stored direction; the region that traverses it
     // backwards reuses the same cubics reversed exactly, so a shared boundary is the
@@ -255,7 +283,7 @@ export function runPipeline(
       transparentBg: options.transparentBg,
       optimize: options.optimize,
       colorOverrides: options.colorOverrides,
-      stackedShapes: options.stackedShapes,
+      stackedShapes: stacked,
     }),
   )
   const pathCount = (svg.match(/<path/g) ?? []).length
@@ -263,7 +291,7 @@ export function runPipeline(
   cache.options = options
   return {
     result: { svg, stats: { pathCount, pointCount, timings } },
-    ...(identity ? {} : { preImage: src }),
+    ...(identity ? {} : { preImage: cache.preShown! }),
     preRan,
     palette: Array.from(cache.palette!.colors),
   }

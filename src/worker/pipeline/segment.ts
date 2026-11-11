@@ -1,13 +1,16 @@
 import type { RasterImage, Palette, Segmentation } from '../../types'
+import { premultipliedPalette } from './alpha'
 
-function nearestPaletteIndex(pal: Palette, r: number, g: number, b: number): number {
+/** `pm` is the palette premultiplied (alpha.ts), the space the image's pixels are in. */
+function nearestPaletteIndex(pm: Float64Array, k: number, data: Uint8ClampedArray, o: number) {
   let best = 0,
     bestD = Infinity
-  for (let c = 0; c < pal.k; c++) {
-    const dr = r - pal.colors[3 * c],
-      dg = g - pal.colors[3 * c + 1],
-      db = b - pal.colors[3 * c + 2]
-    const d = dr * dr + dg * dg + db * db
+  for (let c = 0; c < k; c++) {
+    const dr = data[o] - pm[4 * c],
+      dg = data[o + 1] - pm[4 * c + 1],
+      db = data[o + 2] - pm[4 * c + 2],
+      da = data[o + 3] - pm[4 * c + 3]
+    const d = dr * dr + dg * dg + db * db + da * da
     if (d < bestD) {
       bestD = d
       best = c
@@ -25,8 +28,8 @@ export function segmentImage(
   const { width: w, height: h, data } = image
   const n = w * h
   const colorIdx = new Int32Array(n)
-  for (let p = 0; p < n; p++)
-    colorIdx[p] = nearestPaletteIndex(palette, data[4 * p], data[4 * p + 1], data[4 * p + 2])
+  const pm = premultipliedPalette(palette)
+  for (let p = 0; p < n; p++) colorIdx[p] = nearestPaletteIndex(pm, palette.k, data, 4 * p)
 
   // Ceiling 9 = max slider (3) × max scale (3); the UI scales the slider with scale.
   if (gapClosing > 0) closeGaps(colorIdx, image, palette, Math.min(9, Math.round(gapClosing)))
@@ -232,11 +235,13 @@ function closeGaps(colorIdx: Int32Array, image: RasterImage, palette: Palette, r
   for (let p = 0; p < n; p++) freq[colorIdx[p]]++
   const order = [...Array(palette.k).keys()].sort((a, b) => freq[a] - freq[b] || a - b)
   const bg = order[order.length - 1] // most common color never closes
+  const pm = premultipliedPalette(palette)
   const dist = (p: number, c: number): number => {
-    const dr = data[4 * p] - palette.colors[3 * c]
-    const dg = data[4 * p + 1] - palette.colors[3 * c + 1]
-    const db = data[4 * p + 2] - palette.colors[3 * c + 2]
-    return dr * dr + dg * dg + db * db
+    const dr = data[4 * p] - pm[4 * c]
+    const dg = data[4 * p + 1] - pm[4 * c + 1]
+    const db = data[4 * p + 2] - pm[4 * c + 2]
+    const da = data[4 * p + 3] - pm[4 * c + 3]
+    return dr * dr + dg * dg + db * db + da * da
   }
   const mask = new Uint8Array(n),
     dil = new Uint8Array(n),

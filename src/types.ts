@@ -32,6 +32,7 @@ export interface PipelineOptions {
   gapClosing: number // 0–3 px, bridges dashed thin strokes
   colorOverrides: (string | null)[] | null // output recolor by palette index, '#rrggbb'; null = detected
   stackedShapes: boolean // solid shapes painted in containment order, no holes
+  keepAlpha: boolean // trace the alpha channel into translucent fills; off = composite onto white
   localCircles: LocalCircle[] // stacked in painter order; [] = none
 }
 
@@ -50,12 +51,13 @@ export const DEFAULT_OPTIONS: PipelineOptions = {
   gapClosing: 0,
   colorOverrides: null,
   stackedShapes: false,
+  keepAlpha: false,
   localCircles: [],
 }
 
 export interface Palette {
   k: number
-  colors: Uint8ClampedArray // k*3 RGB
+  colors: Uint8ClampedArray // k*4 straight (not premultiplied) RGBA
 }
 
 export interface Segmentation {

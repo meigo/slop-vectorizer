@@ -4,7 +4,7 @@ import { renderShape, insideCircle, insideRing } from './helpers/render'
 
 const nearest = (p: Uint8ClampedArray, c: number[]) => {
   let best = Infinity
-  for (let i = 0; i < p.length; i += 3)
+  for (let i = 0; i < p.length; i += 4)
     best = Math.min(best, Math.hypot(p[i] - c[0], p[i + 1] - c[1], p[i + 2] - c[2]))
   return best
 }
@@ -78,7 +78,7 @@ describe('estimatePalette with thin strokes', () => {
     const two = renderShape(96, 96, insideCircle(48, 48, 30), [200, 30, 30], [245, 245, 245])
     const pal = estimatePalette(two, 8)
     // every centroid must still be one of the two real colors, not an edge blend
-    for (let i = 0; i < pal.colors.length; i += 3)
+    for (let i = 0; i < pal.colors.length; i += 4)
       expect(
         Math.min(
           Math.hypot(pal.colors[i] - 200, pal.colors[i + 1] - 30, pal.colors[i + 2] - 30),

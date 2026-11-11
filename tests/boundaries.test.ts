@@ -202,7 +202,10 @@ describe('extractBoundaries: diagonal junction', () => {
     for (let x = 0; x < w; x++)
       data.set(pattern[y][x] === 'A' ? [200, 30, 30, 255] : [245, 245, 245, 255], (y * w + x) * 4)
   const img: RasterImage = { width: w, height: h, data }
-  const pal: Palette = { k: 2, colors: new Uint8ClampedArray([200, 30, 30, 245, 245, 245]) }
+  const pal: Palette = {
+    k: 2,
+    colors: new Uint8ClampedArray([200, 30, 30, 255, 245, 245, 245, 255]),
+  }
   const seg = segmentImage(img, pal, 1)
   const all = extractBoundaries(img, seg, pal)
   const byRegion = (size: number) => all.regions.find((r) => seg.regionSize[r.region] === size)!

@@ -81,7 +81,7 @@ const RANGES: Partial<Record<keyof PipelineOptions, [number, number]>> = {
   saturation: [0, 2],
   flatten: [0, 1],
 }
-const FLAGS = ['mergePaths', 'transparentBg', 'optimize', 'stackedShapes'] as const
+const FLAGS = ['mergePaths', 'transparentBg', 'optimize', 'stackedShapes', 'keepAlpha'] as const
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
